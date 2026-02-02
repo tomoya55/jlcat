@@ -601,7 +601,9 @@ git commit -m "feat: add InputSource trait with File and Stdin implementations"
 
 ---
 
-#### Task 2.2: JSON/JSONL形式検出
+#### Task 2.2: Input Format Sniffing
+
+> **設計変更**: 複雑でエラーを起こしやすい`detect_format`を廃止。代わりに、入力ストリームの最初の数バイトを「嗅ぐ（sniffing）」だけの軽量な戦略に切り替える。`{`で始まる入力はすべてJSONLとして扱い、パース戦略を単純化する。
 
 **Files:**
 - Create: `src/input/detector.rs`
@@ -616,33 +618,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_jsonl() {
-        let input = r#"{"id": 1}
-{"id": 2}"#;
-        assert_eq!(detect_format(input), InputFormat::JsonLines);
+    fn test_sniff_json_lines() {
+        let input = b"  {\"id\": 1}\n";
+        assert_eq!(sniff_format(input), Some(InputFormat::JsonLines));
     }
 
     #[test]
-    fn test_detect_json_array() {
-        let input = r#"[{"id": 1}, {"id": 2}]"#;
-        assert_eq!(detect_format(input), InputFormat::JsonArray);
+    fn test_sniff_json_array() {
+        let input = b"   [{\"id\": 1}]";
+        assert_eq!(sniff_format(input), Some(InputFormat::JsonArray));
     }
 
     #[test]
-    fn test_detect_json_object() {
-        let input = r#"{"id": 1, "name": "Alice"}"#;
-        assert_eq!(detect_format(input), InputFormat::JsonObject);
+    fn test_sniff_empty_input() {
+        let input = b"   ";
+        assert_eq!(sniff_format(input), None);
     }
 
     #[test]
-    fn test_detect_jsonl_with_whitespace() {
-        let input = "  \n{\"id\": 1}\n{\"id\": 2}";
-        assert_eq!(detect_format(input), InputFormat::JsonLines);
+    fn test_sniff_invalid_input() {
+        let input = b"not json";
+        assert_eq!(sniff_format(input), None);
     }
 }
 ```
 
-**Step 2: 形式検出実装**
+**Step 2: 形式Sniffing実装**
 
 ```rust
 // src/input/detector.rs
@@ -650,44 +651,21 @@ mod tests {
 pub enum InputFormat {
     JsonLines,
     JsonArray,
-    JsonObject,
 }
 
-pub fn detect_format(input: &str) -> InputFormat {
-    let trimmed = input.trim_start();
-
-    if trimmed.starts_with('[') {
-        // Could be JSON array
-        // Check if it's a single-line array or multi-line JSONL starting with array
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            if parsed.is_array() {
-                return InputFormat::JsonArray;
-            }
+/// Detects the likely input format based on the first few non-whitespace bytes.
+/// This is a lightweight "sniffing" operation and does not perform full validation.
+/// Returns None if the input is empty or doesn't start with a valid JSON character.
+pub fn sniff_format(peek: &[u8]) -> Option<InputFormat> {
+    if let Some(first_char) = peek.iter().find(|c| !c.is_ascii_whitespace()) {
+        match first_char {
+            b'[' => Some(InputFormat::JsonArray),
+            b'{' => Some(InputFormat::JsonLines), // Assume JSONL for any object start
+            _ => None,
         }
+    } else {
+        None // Empty or whitespace-only input
     }
-
-    if trimmed.starts_with('{') {
-        // Check if there are multiple JSON objects (JSONL)
-        let first_line = trimmed.lines().next().unwrap_or("");
-        if serde_json::from_str::<serde_json::Value>(first_line).is_ok() {
-            // Check if there's more content after first line
-            let rest = trimmed[first_line.len()..].trim_start();
-            if rest.is_empty() {
-                return InputFormat::JsonObject;
-            } else if rest.starts_with('{') {
-                return InputFormat::JsonLines;
-            }
-        }
-    }
-
-    // Default to JSONL
-    InputFormat::JsonLines
-}
-
-/// Detect format from first chunk of data (for streaming)
-pub fn detect_format_from_peek(peek: &[u8]) -> InputFormat {
-    let s = String::from_utf8_lossy(peek);
-    detect_format(&s)
 }
 ```
 
@@ -698,7 +676,7 @@ pub fn detect_format_from_peek(peek: &[u8]) -> InputFormat {
 mod detector;
 mod source;
 
-pub use detector::{detect_format, detect_format_from_peek, InputFormat};
+pub use detector::{sniff_format, InputFormat};
 pub use source::{FileSource, InputSource, StdinSource};
 ```
 
@@ -711,7 +689,7 @@ Expected: PASS
 
 ```bash
 git add src/input/detector.rs src/input/mod.rs
-git commit -m "feat: add JSON/JSONL format detection"
+git commit -m "refactor: simplify input detection to lightweight sniffing"
 ```
 
 ---
