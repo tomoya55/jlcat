@@ -55,8 +55,9 @@ impl ChildTable {
 pub struct NestedExtractor;
 
 impl NestedExtractor {
-    /// Extract all nested structures from rows
-    /// Returns a map of field_name -> ChildTable
+    /// Extract all nested structures from rows (recursively)
+    /// Returns a map of field_path -> ChildTable
+    /// Nested structures use dotted paths (e.g., "user.address" for address inside user)
     pub fn extract(rows: &[Value]) -> HashMap<String, ChildTable> {
         let mut children: HashMap<String, ChildTable> = HashMap::new();
 
@@ -65,10 +66,10 @@ impl NestedExtractor {
                 for (key, value) in obj {
                     match value {
                         Value::Object(nested_obj) => {
-                            Self::extract_object(&mut children, key, row_idx, nested_obj);
+                            Self::extract_object_recursive(&mut children, key, row_idx, nested_obj);
                         }
                         Value::Array(arr) => {
-                            Self::extract_array(&mut children, key, row_idx, arr);
+                            Self::extract_array_recursive(&mut children, key, row_idx, arr);
                         }
                         _ => {}
                     }
@@ -79,95 +80,169 @@ impl NestedExtractor {
         children
     }
 
-    /// Extract a nested object into a child table row
-    fn extract_object(
+    /// Extract a nested object into a child table row (recursively)
+    fn extract_object_recursive(
         children: &mut HashMap<String, ChildTable>,
-        key: &str,
+        path: &str,
         row_idx: usize,
         obj: &serde_json::Map<String, Value>,
     ) {
-        let child = children
-            .entry(key.to_string())
-            .or_insert_with(|| ChildTable::new(key.to_string()));
+        // Collect nested structures to process after releasing borrow
+        let mut nested_to_process: Vec<(String, Value)> = Vec::new();
 
-        // Collect all keys from this object and add any new columns
-        for obj_key in obj.keys() {
-            if !child.columns.contains(obj_key) {
-                child.columns.push(obj_key.clone());
+        {
+            let child = children
+                .entry(path.to_string())
+                .or_insert_with(|| ChildTable::new(path.to_string()));
+
+            // Collect all keys from this object and add any new columns
+            for obj_key in obj.keys() {
+                if !child.columns.contains(obj_key) {
+                    child.columns.push(obj_key.clone());
+                }
+            }
+
+            // Create row with values in column order (flatten nested for display)
+            let values: Vec<Value> = child
+                .columns
+                .iter()
+                .map(|col| {
+                    obj.get(col)
+                        .map(|v| Self::flatten_value(v))
+                        .unwrap_or(Value::Null)
+                })
+                .collect();
+
+            child.rows.push((row_idx, values));
+
+            // Collect nested structures for later processing
+            for (key, value) in obj {
+                match value {
+                    Value::Object(_) | Value::Array(_) => {
+                        let nested_path = format!("{}.{}", path, key);
+                        nested_to_process.push((nested_path, value.clone()));
+                    }
+                    _ => {}
+                }
             }
         }
 
-        // Create row with values in column order
-        let values: Vec<Value> = child
-            .columns
-            .iter()
-            .map(|col| obj.get(col).cloned().unwrap_or(Value::Null))
-            .collect();
-
-        child.rows.push((row_idx, values));
+        // Now process nested structures (borrow released)
+        for (nested_path, value) in nested_to_process {
+            match &value {
+                Value::Object(nested_obj) => {
+                    Self::extract_object_recursive(children, &nested_path, row_idx, nested_obj);
+                }
+                Value::Array(arr) => {
+                    Self::extract_array_recursive(children, &nested_path, row_idx, arr);
+                }
+                _ => {}
+            }
+        }
     }
 
-    /// Extract array elements into child table rows (one row per element)
-    fn extract_array(
+    /// Extract array elements into child table rows (recursively)
+    fn extract_array_recursive(
         children: &mut HashMap<String, ChildTable>,
-        key: &str,
+        path: &str,
         row_idx: usize,
         arr: &[Value],
     ) {
-        let child = children
-            .entry(key.to_string())
-            .or_insert_with(|| ChildTable::new(key.to_string()));
+        // Collect nested structures to process after releasing borrow
+        let mut nested_to_process: Vec<(String, Value)> = Vec::new();
 
-        for element in arr {
-            match element {
-                Value::Object(obj) => {
-                    // Add columns from this object
-                    for obj_key in obj.keys() {
-                        if !child.columns.contains(obj_key) {
-                            child.columns.push(obj_key.clone());
+        {
+            let child = children
+                .entry(path.to_string())
+                .or_insert_with(|| ChildTable::new(path.to_string()));
+
+            for element in arr {
+                match element {
+                    Value::Object(obj) => {
+                        // Add columns from this object
+                        for obj_key in obj.keys() {
+                            if !child.columns.contains(obj_key) {
+                                child.columns.push(obj_key.clone());
+                            }
+                        }
+
+                        // Create row with flattened values
+                        let values: Vec<Value> = child
+                            .columns
+                            .iter()
+                            .map(|col| {
+                                obj.get(col)
+                                    .map(|v| Self::flatten_value(v))
+                                    .unwrap_or(Value::Null)
+                            })
+                            .collect();
+
+                        child.rows.push((row_idx, values));
+
+                        // Collect nested structures for later processing
+                        for (key, value) in obj {
+                            match value {
+                                Value::Object(_) | Value::Array(_) => {
+                                    let nested_path = format!("{}.{}", path, key);
+                                    nested_to_process.push((nested_path, value.clone()));
+                                }
+                                _ => {}
+                            }
                         }
                     }
+                    _ => {
+                        // For primitive arrays, use a "value" column
+                        if !child.columns.contains(&"value".to_string()) {
+                            child.columns.push("value".to_string());
+                        }
 
-                    // Create row
-                    let values: Vec<Value> = child
-                        .columns
-                        .iter()
-                        .map(|col| obj.get(col).cloned().unwrap_or(Value::Null))
-                        .collect();
+                        // Build row with nulls for all columns except "value"
+                        let values: Vec<Value> = child
+                            .columns
+                            .iter()
+                            .map(|col| {
+                                if col == "value" {
+                                    element.clone()
+                                } else {
+                                    Value::Null
+                                }
+                            })
+                            .collect();
 
-                    child.rows.push((row_idx, values));
-                }
-                _ => {
-                    // For primitive arrays, use a "value" column
-                    if !child.columns.contains(&"value".to_string()) {
-                        child.columns.push("value".to_string());
+                        child.rows.push((row_idx, values));
                     }
+                }
+            }
 
-                    // Build row with nulls for all columns except "value"
-                    let values: Vec<Value> = child
-                        .columns
-                        .iter()
-                        .map(|col| {
-                            if col == "value" {
-                                element.clone()
-                            } else {
-                                Value::Null
-                            }
-                        })
-                        .collect();
-
-                    child.rows.push((row_idx, values));
+            // Normalize all rows to have the same number of columns
+            let col_count = child.columns.len();
+            for (_, values) in &mut child.rows {
+                while values.len() < col_count {
+                    values.push(Value::Null);
                 }
             }
         }
 
-        // Normalize all rows to have the same number of columns
-        // (earlier rows may be shorter if columns were added later)
-        let col_count = child.columns.len();
-        for (_, values) in &mut child.rows {
-            while values.len() < col_count {
-                values.push(Value::Null);
+        // Now process nested structures (borrow released)
+        for (nested_path, value) in nested_to_process {
+            match &value {
+                Value::Object(obj) => {
+                    Self::extract_object_recursive(children, &nested_path, row_idx, obj);
+                }
+                Value::Array(arr) => {
+                    Self::extract_array_recursive(children, &nested_path, row_idx, arr);
+                }
+                _ => {}
             }
+        }
+    }
+
+    /// Flatten a value for display in parent table (replace nested with placeholder)
+    fn flatten_value(value: &Value) -> Value {
+        match value {
+            Value::Object(_) => Value::String("{...}".to_string()),
+            Value::Array(_) => Value::String("[...]".to_string()),
+            _ => value.clone(),
         }
     }
 
@@ -378,5 +453,109 @@ mod tests {
         // Third row: object {"name": "C"}
         assert_eq!(items.rows[2].1[name_idx], json!("C"));
         assert_eq!(items.rows[2].1[value_idx], Value::Null);
+    }
+
+    #[test]
+    fn test_recursive_nested_objects() {
+        // Deeply nested: user -> address -> coordinates
+        let rows = vec![json!({
+            "id": 1,
+            "user": {
+                "name": "Alice",
+                "address": {
+                    "city": "Tokyo",
+                    "coordinates": {
+                        "lat": 35.6762,
+                        "lng": 139.6503
+                    }
+                }
+            }
+        })];
+
+        let children = NestedExtractor::extract(&rows);
+
+        // Should have child tables for all levels
+        assert!(children.contains_key("user"), "Should have 'user' table");
+        assert!(
+            children.contains_key("user.address"),
+            "Should have 'user.address' table"
+        );
+        assert!(
+            children.contains_key("user.address.coordinates"),
+            "Should have 'user.address.coordinates' table"
+        );
+
+        // Check user table has address as placeholder
+        let user = &children["user"];
+        assert!(user.columns.contains(&"name".to_string()));
+        assert!(user.columns.contains(&"address".to_string()));
+
+        // Check deepest level has actual values
+        let coords = &children["user.address.coordinates"];
+        assert!(coords.columns.contains(&"lat".to_string()));
+        assert!(coords.columns.contains(&"lng".to_string()));
+        assert_eq!(coords.rows.len(), 1);
+    }
+
+    #[test]
+    fn test_recursive_array_with_nested_objects() {
+        // Array elements containing nested objects
+        let rows = vec![json!({
+            "id": 1,
+            "orders": [
+                {
+                    "item": "Apple",
+                    "shipping": {"method": "express", "cost": 10}
+                },
+                {
+                    "item": "Banana",
+                    "shipping": {"method": "standard", "cost": 5}
+                }
+            ]
+        })];
+
+        let children = NestedExtractor::extract(&rows);
+
+        // Should have child tables for orders and orders.shipping
+        assert!(children.contains_key("orders"), "Should have 'orders' table");
+        assert!(
+            children.contains_key("orders.shipping"),
+            "Should have 'orders.shipping' table"
+        );
+
+        // Check orders table
+        let orders = &children["orders"];
+        assert_eq!(orders.rows.len(), 2);
+        assert!(orders.columns.contains(&"item".to_string()));
+        assert!(orders.columns.contains(&"shipping".to_string()));
+
+        // Check nested shipping table
+        let shipping = &children["orders.shipping"];
+        assert_eq!(shipping.rows.len(), 2);
+        assert!(shipping.columns.contains(&"method".to_string()));
+        assert!(shipping.columns.contains(&"cost".to_string()));
+    }
+
+    #[test]
+    fn test_recursive_nested_arrays() {
+        // Nested arrays: matrix containing arrays
+        let rows = vec![json!({
+            "id": 1,
+            "data": {
+                "tags": ["a", "b", "c"]
+            }
+        })];
+
+        let children = NestedExtractor::extract(&rows);
+
+        assert!(children.contains_key("data"), "Should have 'data' table");
+        assert!(
+            children.contains_key("data.tags"),
+            "Should have 'data.tags' table"
+        );
+
+        let tags = &children["data.tags"];
+        assert_eq!(tags.rows.len(), 3);
+        assert_eq!(tags.columns, vec!["value"]);
     }
 }
