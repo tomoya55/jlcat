@@ -2,6 +2,7 @@ mod cli;
 mod core;
 mod error;
 mod input;
+mod render;
 
 use clap::Parser;
 use cli::Cli;
