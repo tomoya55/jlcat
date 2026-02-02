@@ -110,6 +110,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install clparse
+        uses: taiki-e/install-action@v2
+        with:
+          tool: clparse
+
       - name: Extract changelog for version
         id: changelog
         shell: bash
@@ -117,23 +122,11 @@ jobs:
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"  # v0.1.0 -> 0.1.0
 
-          # Check if version exists in CHANGELOG.md
-          if ! grep -qE "^## \[?${VERSION}\]?" CHANGELOG.md; then
-            echo "::error::Version ${VERSION} not found in CHANGELOG.md"
-            exit 1
-          fi
+          # Use clparse to extract release notes as JSON
+          NOTES=$(clparse -f json CHANGELOG.md | jq -r --arg ver "$VERSION" '.releases[] | select(.version == $ver) | .body')
 
-          # Extract the section for this version (from ## [version] or ## version to next ## or EOF)
-          NOTES=$(awk -v ver="$VERSION" '
-            /^## \[?[0-9]/ {
-              if (found) exit
-              if ($0 ~ "^## \\[?" ver "\\]?") { found=1; next }
-            }
-            found { print }
-          ' CHANGELOG.md)
-
-          if [ -z "$NOTES" ]; then
-            echo "::error::No release notes found for version ${VERSION}"
+          if [ -z "$NOTES" ] || [ "$NOTES" = "null" ]; then
+            echo "::error::No release notes found for version ${VERSION} in CHANGELOG.md"
             exit 1
           fi
 
