@@ -1,3 +1,4 @@
+mod cache;
 mod extractor;
 mod filter;
 mod path;
@@ -7,6 +8,7 @@ mod sorter;
 mod table;
 mod value;
 
+pub use cache::RowCache;
 pub use extractor::{ChildTable, NestedExtractor};
 pub use filter::{FilterCondition, FilterExpr, FilterOp, FullTextSearch};
 pub use path::{CompiledPath, PathSegment};
