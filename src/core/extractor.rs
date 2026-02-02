@@ -81,14 +81,16 @@ impl NestedExtractor {
     }
 
     /// Extract a nested object into a child table row (recursively)
+    /// parent_row_idx is the row index in the immediate parent table
     fn extract_object_recursive(
         children: &mut HashMap<String, ChildTable>,
         path: &str,
-        row_idx: usize,
+        parent_row_idx: usize,
         obj: &serde_json::Map<String, Value>,
     ) {
         // Collect nested structures to process after releasing borrow
-        let mut nested_to_process: Vec<(String, Value)> = Vec::new();
+        // (nested_path, value, this_row_idx in current child table)
+        let mut nested_to_process: Vec<(String, Value, usize)> = Vec::new();
 
         {
             let child = children
@@ -113,14 +115,16 @@ impl NestedExtractor {
                 })
                 .collect();
 
-            child.rows.push((row_idx, values));
+            // Track this row's index in the child table for nested extractions
+            let this_row_idx = child.rows.len();
+            child.rows.push((parent_row_idx, values));
 
             // Collect nested structures for later processing
             for (key, value) in obj {
                 match value {
                     Value::Object(_) | Value::Array(_) => {
                         let nested_path = format!("{}.{}", path, key);
-                        nested_to_process.push((nested_path, value.clone()));
+                        nested_to_process.push((nested_path, value.clone(), this_row_idx));
                     }
                     _ => {}
                 }
@@ -128,13 +132,14 @@ impl NestedExtractor {
         }
 
         // Now process nested structures (borrow released)
-        for (nested_path, value) in nested_to_process {
+        // Pass this row's index as the parent row for nested children
+        for (nested_path, value, this_row_idx) in nested_to_process {
             match &value {
                 Value::Object(nested_obj) => {
-                    Self::extract_object_recursive(children, &nested_path, row_idx, nested_obj);
+                    Self::extract_object_recursive(children, &nested_path, this_row_idx, nested_obj);
                 }
                 Value::Array(arr) => {
-                    Self::extract_array_recursive(children, &nested_path, row_idx, arr);
+                    Self::extract_array_recursive(children, &nested_path, this_row_idx, arr);
                 }
                 _ => {}
             }
@@ -142,14 +147,16 @@ impl NestedExtractor {
     }
 
     /// Extract array elements into child table rows (recursively)
+    /// parent_row_idx is the row index in the immediate parent table
     fn extract_array_recursive(
         children: &mut HashMap<String, ChildTable>,
         path: &str,
-        row_idx: usize,
+        parent_row_idx: usize,
         arr: &[Value],
     ) {
         // Collect nested structures to process after releasing borrow
-        let mut nested_to_process: Vec<(String, Value)> = Vec::new();
+        // (nested_path, value, this_row_idx in current child table)
+        let mut nested_to_process: Vec<(String, Value, usize)> = Vec::new();
 
         {
             let child = children
@@ -177,14 +184,16 @@ impl NestedExtractor {
                             })
                             .collect();
 
-                        child.rows.push((row_idx, values));
+                        // Track this row's index for nested extractions
+                        let this_row_idx = child.rows.len();
+                        child.rows.push((parent_row_idx, values));
 
                         // Collect nested structures for later processing
                         for (key, value) in obj {
                             match value {
                                 Value::Object(_) | Value::Array(_) => {
                                     let nested_path = format!("{}.{}", path, key);
-                                    nested_to_process.push((nested_path, value.clone()));
+                                    nested_to_process.push((nested_path, value.clone(), this_row_idx));
                                 }
                                 _ => {}
                             }
@@ -209,7 +218,7 @@ impl NestedExtractor {
                             })
                             .collect();
 
-                        child.rows.push((row_idx, values));
+                        child.rows.push((parent_row_idx, values));
                     }
                 }
             }
@@ -224,13 +233,14 @@ impl NestedExtractor {
         }
 
         // Now process nested structures (borrow released)
-        for (nested_path, value) in nested_to_process {
+        // Pass each row's index as the parent row for its nested children
+        for (nested_path, value, this_row_idx) in nested_to_process {
             match &value {
                 Value::Object(obj) => {
-                    Self::extract_object_recursive(children, &nested_path, row_idx, obj);
+                    Self::extract_object_recursive(children, &nested_path, this_row_idx, obj);
                 }
                 Value::Array(arr) => {
-                    Self::extract_array_recursive(children, &nested_path, row_idx, arr);
+                    Self::extract_array_recursive(children, &nested_path, this_row_idx, arr);
                 }
                 _ => {}
             }
@@ -557,5 +567,90 @@ mod tests {
         let tags = &children["data.tags"];
         assert_eq!(tags.rows.len(), 3);
         assert_eq!(tags.columns, vec!["value"]);
+    }
+
+    #[test]
+    fn test_nested_parent_row_mapping() {
+        // Verify that nested child tables reference their immediate parent's row,
+        // not the top-level row index
+        let rows = vec![json!({
+            "id": 1,
+            "orders": [
+                {
+                    "item": "Apple",
+                    "shipping": {"method": "express", "cost": 10}
+                },
+                {
+                    "item": "Banana",
+                    "shipping": {"method": "standard", "cost": 5}
+                }
+            ]
+        })];
+
+        let children = NestedExtractor::extract(&rows);
+
+        let orders = &children["orders"];
+        let shipping = &children["orders.shipping"];
+
+        // orders table: both rows reference parent row 0 (top-level)
+        assert_eq!(orders.rows[0].0, 0, "First order should reference top-level row 0");
+        assert_eq!(orders.rows[1].0, 0, "Second order should reference top-level row 0");
+
+        // orders.shipping table: each shipping references its ORDER row, not top-level
+        // First shipping (express) belongs to orders row 0
+        assert_eq!(
+            shipping.rows[0].0, 0,
+            "Express shipping should reference orders row 0"
+        );
+        // Second shipping (standard) belongs to orders row 1
+        assert_eq!(
+            shipping.rows[1].0, 1,
+            "Standard shipping should reference orders row 1"
+        );
+    }
+
+    #[test]
+    fn test_deep_nested_parent_mapping() {
+        // Test 3-level nesting: user -> address -> coordinates
+        let rows = vec![
+            json!({
+                "id": 1,
+                "user": {
+                    "name": "Alice",
+                    "address": {
+                        "city": "Tokyo",
+                        "coordinates": {"lat": 35.6762, "lng": 139.6503}
+                    }
+                }
+            }),
+            json!({
+                "id": 2,
+                "user": {
+                    "name": "Bob",
+                    "address": {
+                        "city": "Osaka",
+                        "coordinates": {"lat": 34.6937, "lng": 135.5023}
+                    }
+                }
+            }),
+        ];
+
+        let children = NestedExtractor::extract(&rows);
+
+        let user = &children["user"];
+        let address = &children["user.address"];
+        let coords = &children["user.address.coordinates"];
+
+        // user rows reference top-level rows
+        assert_eq!(user.rows[0].0, 0, "Alice's user references top row 0");
+        assert_eq!(user.rows[1].0, 1, "Bob's user references top row 1");
+
+        // address rows reference their user row
+        assert_eq!(address.rows[0].0, 0, "Alice's address references user row 0");
+        assert_eq!(address.rows[1].0, 1, "Bob's address references user row 1");
+
+        // coordinates rows reference their address row
+        assert_eq!(coords.rows[0].0, 0, "Tokyo coords reference address row 0");
+        assert_eq!(coords.rows[1].0, 1, "Osaka coords reference address row 1");
     }
 }
