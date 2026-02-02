@@ -1,3 +1,4 @@
+mod extractor;
 mod filter;
 mod path;
 mod schema;
@@ -6,6 +7,7 @@ mod sorter;
 mod table;
 mod value;
 
+pub use extractor::{ChildTable, NestedExtractor};
 pub use filter::{FilterCondition, FilterExpr, FilterOp, FullTextSearch};
 pub use path::{CompiledPath, PathSegment};
 pub use schema::{ColumnType, Schema, SchemaInferrer};
