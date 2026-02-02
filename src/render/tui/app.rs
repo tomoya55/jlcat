@@ -72,7 +72,7 @@ impl App {
             .map(|f| {
                 f.conditions
                     .iter()
-                    .map(|c| format!("{}={}", c.column, c.value))
+                    .map(|c| format!("{}{}{}", c.column, c.op.as_str(), c.value))
                     .collect::<Vec<_>>()
                     .join(" ")
             })

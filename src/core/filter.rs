@@ -14,6 +14,22 @@ pub enum FilterOp {
     NotContains, // !~
 }
 
+impl FilterOp {
+    /// Get the string representation of the operator
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FilterOp::Eq => "=",
+            FilterOp::Ne => "!=",
+            FilterOp::Gt => ">",
+            FilterOp::Gte => ">=",
+            FilterOp::Lt => "<",
+            FilterOp::Lte => "<=",
+            FilterOp::Contains => "~",
+            FilterOp::NotContains => "!~",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FilterCondition {
     pub column: String,
