@@ -57,7 +57,17 @@ impl FilterCondition {
     fn matches_eq(&self, row_value: Option<&Value>) -> bool {
         match row_value {
             Some(Value::String(s)) => s == &self.value,
-            Some(Value::Number(n)) => n.to_string() == self.value,
+            Some(Value::Number(n)) => {
+                // Try numeric comparison first for consistency with >/< operators
+                if let Ok(filter_num) = self.value.parse::<f64>() {
+                    if let Some(row_num) = n.as_f64() {
+                        return (row_num - filter_num).abs() < f64::EPSILON
+                            || row_num == filter_num;
+                    }
+                }
+                // Fall back to string comparison
+                n.to_string() == self.value
+            }
             Some(Value::Bool(b)) => b.to_string() == self.value,
             Some(Value::Null) => self.value == "null",
             _ => false,
@@ -367,5 +377,34 @@ mod tests {
         assert!(search.matches(&json!({"address": {"city": "Tokyo"}})));
         assert!(search.matches(&json!({"items": ["Tokyo", "Osaka"]})));
         assert!(!search.matches(&json!({"city": "Osaka"})));
+    }
+
+    #[test]
+    fn test_numeric_equality() {
+        // Integer filter should match float representation
+        let expr = FilterExpr::parse("age=30").unwrap();
+        assert!(expr.matches(&json!({"age": 30})));
+        assert!(expr.matches(&json!({"age": 30.0})));
+        assert!(!expr.matches(&json!({"age": 31})));
+
+        // Float filter should match integer representation
+        let expr = FilterExpr::parse("score=3.5").unwrap();
+        assert!(expr.matches(&json!({"score": 3.5})));
+        assert!(!expr.matches(&json!({"score": 3})));
+
+        // Scientific notation in JSON
+        let expr = FilterExpr::parse("value=1000").unwrap();
+        assert!(expr.matches(&json!({"value": 1000})));
+        assert!(expr.matches(&json!({"value": 1e3})));
+        assert!(expr.matches(&json!({"value": 1000.0})));
+    }
+
+    #[test]
+    fn test_numeric_inequality() {
+        // != should also use numeric comparison
+        let expr = FilterExpr::parse("age!=30").unwrap();
+        assert!(!expr.matches(&json!({"age": 30})));
+        assert!(!expr.matches(&json!({"age": 30.0})));
+        assert!(expr.matches(&json!({"age": 31})));
     }
 }
