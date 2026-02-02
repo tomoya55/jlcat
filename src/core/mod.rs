@@ -16,6 +16,10 @@ mod value;
 pub use cache::RowCache;
 pub use extractor::{ChildTable, NestedExtractor};
 pub use filter::{FilterExpr, FullTextSearch};
+#[allow(unused_imports)]
+pub use schema::SchemaInferrer;
 pub use selector::ColumnSelector;
 pub use sorter::Sorter;
 pub use table::TableData;
+#[allow(unused_imports)]
+pub use value::get_nested_value;

@@ -109,11 +109,7 @@ impl NestedExtractor {
             let values: Vec<Value> = child
                 .columns
                 .iter()
-                .map(|col| {
-                    obj.get(col)
-                        .map(Self::flatten_value)
-                        .unwrap_or(Value::Null)
-                })
+                .map(|col| obj.get(col).map(Self::flatten_value).unwrap_or(Value::Null))
                 .collect();
 
             // Track this row's index in the child table for nested extractions
@@ -183,11 +179,7 @@ impl NestedExtractor {
                         let values: Vec<Value> = child
                             .columns
                             .iter()
-                            .map(|col| {
-                                obj.get(col)
-                                    .map(Self::flatten_value)
-                                    .unwrap_or(Value::Null)
-                            })
+                            .map(|col| obj.get(col).map(Self::flatten_value).unwrap_or(Value::Null))
                             .collect();
 
                         // Track this row's index for nested extractions

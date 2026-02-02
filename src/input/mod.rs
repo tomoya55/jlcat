@@ -8,4 +8,8 @@ mod source;
 #[allow(dead_code)]
 mod spooler;
 
+#[allow(unused_imports)]
+pub use cached::CachedReader;
 pub use detector::{sniff_format, InputFormat};
+#[allow(unused_imports)]
+pub use indexed::IndexedReader;

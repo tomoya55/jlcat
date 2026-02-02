@@ -64,10 +64,7 @@ fn main() -> Result<()> {
                 TableData::from_rows(rows.clone(), selector)
             } else {
                 // No column selection: flatten to show placeholders
-                let flat_rows: Vec<Value> = rows
-                    .iter()
-                    .map(NestedExtractor::flatten_row)
-                    .collect();
+                let flat_rows: Vec<Value> = rows.iter().map(NestedExtractor::flatten_row).collect();
                 TableData::from_rows(flat_rows, None)
             };
             println!("{}", renderer.render(&parent_table));
