@@ -90,8 +90,19 @@ fn main() -> Result<()> {
 
 fn read_input(cli: &Cli) -> Result<Vec<Value>> {
     if let Some(ref path) = cli.file {
-        let source = FileSource::open(path)?;
-        read_from_lines(source.lines(), cli.is_strict())
+        let file = std::fs::File::open(path)?;
+        let reader = BufReader::new(file);
+
+        // Peek to detect format (same as stdin)
+        let mut peekable = PeekableReader::new(reader);
+        let peek = peekable.peek(64)?;
+
+        match sniff_format(&peek) {
+            Some(InputFormat::JsonArray) => read_json_array(&mut peekable, cli.is_strict()),
+            Some(InputFormat::JsonLines) | None => {
+                read_from_lines(peekable.lines(), cli.is_strict())
+            }
+        }
     } else {
         let stdin = io::stdin();
         let reader = BufReader::new(stdin.lock());
