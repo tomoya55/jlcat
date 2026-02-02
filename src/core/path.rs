@@ -76,6 +76,14 @@ impl CompiledPath {
     }
 
     pub fn get<'a>(&self, value: &'a Value) -> Option<&'a Value> {
+        // First try literal key (for flattened column names like "address.city")
+        if self.segments.len() > 1 {
+            if let Some(v) = value.get(&self.original) {
+                return Some(v);
+            }
+        }
+
+        // Fall back to nested path lookup
         let mut current = value;
 
         for segment in &self.segments {
@@ -144,5 +152,24 @@ mod tests {
         let path = CompiledPath::compile("missing.field").unwrap();
         let row = json!({"other": 1});
         assert_eq!(path.get(&row), None);
+    }
+
+    #[test]
+    fn test_get_literal_dotted_key() {
+        // When column selection flattens "address.city" into a literal key
+        let path = CompiledPath::compile("address.city").unwrap();
+        let row = json!({"address.city": "Tokyo"});
+        assert_eq!(path.get(&row), Some(&json!("Tokyo")));
+    }
+
+    #[test]
+    fn test_get_prefers_literal_over_nested() {
+        // Literal key takes precedence when both exist
+        let path = CompiledPath::compile("address.city").unwrap();
+        let row = json!({
+            "address.city": "Literal",
+            "address": {"city": "Nested"}
+        });
+        assert_eq!(path.get(&row), Some(&json!("Literal")));
     }
 }
