@@ -166,3 +166,44 @@ fn test_recursive_no_nested() {
         .success()
         .stdout(predicate::str::contains("Alice"));
 }
+
+#[test]
+fn test_strict_mode_rejects_non_object_jsonl() {
+    // Strict mode (default) should reject non-object JSON values
+    let input = "1\n\"foo\"\n[1,2,3]";
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.write_stdin(input)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("expected JSON object"));
+}
+
+#[test]
+fn test_lenient_mode_skips_non_object_jsonl() {
+    // Lenient mode should skip non-object values with warning
+    let input = r#"{"id": 1}
+42
+{"id": 2}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["--lenient"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("expected JSON object, skipping"));
+}
+
+#[test]
+fn test_lenient_mode_renders_valid_objects_only() {
+    // Lenient mode should render only valid objects
+    let input = r#"{"name": "Alice"}
+"string_value"
+{"name": "Bob"}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["--lenient"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice"))
+        .stdout(predicate::str::contains("Bob"))
+        .stdout(predicate::str::contains("string_value").not());
+}
