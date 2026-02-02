@@ -46,9 +46,9 @@ fn main() -> Result<()> {
 
     // Render
     if cli.interactive {
-        // TUI mode - to be implemented
-        eprintln!("TUI mode not yet implemented");
-        std::process::exit(1);
+        // TUI mode
+        let table_data = TableData::from_rows(rows, selector);
+        render::tui::run(table_data)?;
     } else {
         let renderer = CatRenderer::new(cli.style.clone());
 
