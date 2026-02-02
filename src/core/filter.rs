@@ -194,15 +194,27 @@ impl FilterExpr {
                 _ => return Err(JlcatError::InvalidFilter("missing operator".into())),
             };
 
-            // Parse value
+            // Parse value (supports escaped quotes: \" or \')
             let value = if chars.peek() == Some(&'"') || chars.peek() == Some(&'\'') {
                 let quote = chars.next().unwrap();
                 let mut val = String::new();
                 while let Some(c) = chars.next() {
-                    if c == quote {
+                    if c == '\\' {
+                        // Handle escape sequence
+                        if let Some(&next_c) = chars.peek() {
+                            if next_c == quote || next_c == '\\' {
+                                // Escaped quote or backslash - include the escaped char
+                                val.push(chars.next().unwrap());
+                                continue;
+                            }
+                        }
+                        // Unrecognized escape - include the backslash literally
+                        val.push(c);
+                    } else if c == quote {
                         break;
+                    } else {
+                        val.push(c);
                     }
-                    val.push(c);
                 }
                 val
             } else {
@@ -406,5 +418,33 @@ mod tests {
         assert!(!expr.matches(&json!({"age": 30})));
         assert!(!expr.matches(&json!({"age": 30.0})));
         assert!(expr.matches(&json!({"age": 31})));
+    }
+
+    #[test]
+    fn test_escaped_quotes_in_filter() {
+        // Escaped double quotes within double-quoted value
+        let expr = FilterExpr::parse(r#"name="Alice \"The Great\"""#).unwrap();
+        assert_eq!(expr.conditions[0].value, r#"Alice "The Great""#);
+        assert!(expr.matches(&json!({"name": "Alice \"The Great\""})));
+
+        // Escaped single quotes within single-quoted value
+        let expr = FilterExpr::parse(r"name='It\'s fine'").unwrap();
+        assert_eq!(expr.conditions[0].value, "It's fine");
+        assert!(expr.matches(&json!({"name": "It's fine"})));
+    }
+
+    #[test]
+    fn test_escaped_backslash_in_filter() {
+        // Escaped backslash
+        let expr = FilterExpr::parse(r#"path="C:\\Users\\Alice""#).unwrap();
+        assert_eq!(expr.conditions[0].value, r"C:\Users\Alice");
+        assert!(expr.matches(&json!({"path": r"C:\Users\Alice"})));
+    }
+
+    #[test]
+    fn test_unrecognized_escape_preserved() {
+        // Unrecognized escape sequences preserve the backslash
+        let expr = FilterExpr::parse(r#"text="hello\nworld""#).unwrap();
+        assert_eq!(expr.conditions[0].value, r"hello\nworld");
     }
 }
