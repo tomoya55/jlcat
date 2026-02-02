@@ -126,3 +126,43 @@ fn test_file_not_found() {
     let mut cmd = Command::cargo_bin("jlcat").unwrap();
     cmd.arg("nonexistent.jsonl").assert().failure();
 }
+
+#[test]
+fn test_recursive_nested_object() {
+    let input = r#"{"id": 1, "address": {"city": "Tokyo"}}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-r"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("{...}"))
+        .stdout(predicate::str::contains("## address"))
+        .stdout(predicate::str::contains("Tokyo"))
+        .stdout(predicate::str::contains("_parent_row"));
+}
+
+#[test]
+fn test_recursive_array() {
+    let input = r#"{"id": 1, "items": [{"name": "A"}, {"name": "B"}]}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-r"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[...]"))
+        .stdout(predicate::str::contains("## items"))
+        .stdout(predicate::str::contains("A"))
+        .stdout(predicate::str::contains("B"));
+}
+
+#[test]
+fn test_recursive_no_nested() {
+    // Should work normally when no nested data
+    let input = r#"{"id": 1, "name": "Alice"}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-r"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice"));
+}

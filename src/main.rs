@@ -6,7 +6,7 @@ mod render;
 
 use clap::Parser;
 use cli::Cli;
-use core::{ColumnSelector, Sorter, TableData};
+use core::{ChildTable, ColumnSelector, NestedExtractor, Sorter, TableData};
 use error::{JlcatError, Result};
 use input::{sniff_format, FileSource, InputFormat, InputSource};
 use render::CatRenderer;
@@ -44,9 +44,6 @@ fn main() -> Result<()> {
         None
     };
 
-    // Create table data
-    let table_data = TableData::from_rows(rows, selector);
-
     // Render
     if cli.interactive {
         // TUI mode - to be implemented
@@ -54,7 +51,38 @@ fn main() -> Result<()> {
         std::process::exit(1);
     } else {
         let renderer = CatRenderer::new(cli.style.clone());
-        println!("{}", renderer.render(&table_data));
+
+        if cli.recursive {
+            // Extract nested structures
+            let children = NestedExtractor::extract(&rows);
+
+            // Flatten parent rows (replace nested with placeholders)
+            let flat_rows: Vec<Value> = rows
+                .iter()
+                .map(|r| NestedExtractor::flatten_row(r))
+                .collect();
+
+            // Render parent table
+            let parent_table = TableData::from_rows(flat_rows, selector);
+            println!("{}", renderer.render(&parent_table));
+
+            // Render child tables
+            let mut child_names: Vec<_> = children.keys().collect();
+            child_names.sort(); // Consistent ordering
+
+            for name in child_names {
+                let child = &children[name];
+                if !child.is_empty() {
+                    println!("\n## {}\n", name);
+                    let child_table = child_table_to_table_data(child);
+                    println!("{}", renderer.render(&child_table));
+                }
+            }
+        } else {
+            // Normal mode - render all data as single table
+            let table_data = TableData::from_rows(rows, selector);
+            println!("{}", renderer.render(&table_data));
+        }
     }
 
     Ok(())
@@ -136,6 +164,26 @@ fn read_json_array<R: Read>(reader: &mut PeekableReader<R>, strict: bool) -> Res
     }
 
     Ok(rows)
+}
+
+/// Convert a ChildTable to TableData for rendering
+fn child_table_to_table_data(child: &ChildTable) -> TableData {
+    let columns = child.columns_with_parent();
+    let rows = child.rows_with_parent();
+
+    // Convert to JSON objects for TableData
+    let json_rows: Vec<Value> = rows
+        .into_iter()
+        .map(|values| {
+            let mut obj = serde_json::Map::new();
+            for (col, val) in columns.iter().zip(values) {
+                obj.insert(col.clone(), val);
+            }
+            Value::Object(obj)
+        })
+        .collect();
+
+    TableData::from_rows(json_rows, None)
 }
 
 /// A reader that can peek ahead without consuming bytes
