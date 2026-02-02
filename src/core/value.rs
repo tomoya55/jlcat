@@ -60,8 +60,18 @@ impl<'a> Ord for SortableValue<'a> {
     }
 }
 
-/// Helper function to get a nested value using dot notation
+/// Helper function to get a nested value using dot notation.
+/// First tries literal key lookup (for flattened column names like "address.city"),
+/// then falls back to nested path traversal.
 pub fn get_nested_value<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
+    // First try literal key (for flattened column names like "address.city")
+    if path.contains('.') || path.contains('[') {
+        if let Some(v) = value.get(path) {
+            return Some(v);
+        }
+    }
+
+    // Fall back to nested path lookup
     let mut current = value;
 
     for part in path.split('.') {
@@ -161,5 +171,29 @@ mod tests {
     fn test_get_nested_array() {
         let row = json!({"items": [1, 2, 3]});
         assert_eq!(get_nested_value(&row, "items[1]"), Some(&json!(2)));
+    }
+
+    #[test]
+    fn test_get_literal_dotted_key() {
+        // When column selection flattens "address.city" into a literal key
+        let row = json!({"address.city": "Tokyo"});
+        assert_eq!(get_nested_value(&row, "address.city"), Some(&json!("Tokyo")));
+    }
+
+    #[test]
+    fn test_get_prefers_literal_over_nested() {
+        // Literal key takes precedence when both exist
+        let row = json!({
+            "address.city": "Literal",
+            "address": {"city": "Nested"}
+        });
+        assert_eq!(get_nested_value(&row, "address.city"), Some(&json!("Literal")));
+    }
+
+    #[test]
+    fn test_get_literal_array_key() {
+        // Literal key with bracket notation
+        let row = json!({"items[0]": "Literal"});
+        assert_eq!(get_nested_value(&row, "items[0]"), Some(&json!("Literal")));
     }
 }
