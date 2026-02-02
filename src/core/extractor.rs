@@ -199,8 +199,36 @@ impl NestedExtractor {
                             }
                         }
                     }
+                    Value::Array(inner_arr) => {
+                        // For nested arrays, use a "value" column with placeholder
+                        if !child.columns.contains(&"value".to_string()) {
+                            child.columns.push("value".to_string());
+                        }
+
+                        // Track this row's index for nested extractions
+                        let this_row_idx = child.rows.len();
+
+                        // Build row with placeholder for the nested array
+                        let values: Vec<Value> = child
+                            .columns
+                            .iter()
+                            .map(|col| {
+                                if col == "value" {
+                                    Value::String("[...]".to_string())
+                                } else {
+                                    Value::Null
+                                }
+                            })
+                            .collect();
+
+                        child.rows.push((parent_row_idx, values));
+
+                        // Queue the nested array for recursive processing
+                        let nested_path = format!("{}.value", path);
+                        nested_to_process.push((nested_path, Value::Array(inner_arr.clone()), this_row_idx));
+                    }
                     _ => {
-                        // For primitive arrays, use a "value" column
+                        // For primitives, use a "value" column
                         if !child.columns.contains(&"value".to_string()) {
                             child.columns.push("value".to_string());
                         }
@@ -652,5 +680,67 @@ mod tests {
         // coordinates rows reference their address row
         assert_eq!(coords.rows[0].0, 0, "Tokyo coords reference address row 0");
         assert_eq!(coords.rows[1].0, 1, "Osaka coords reference address row 1");
+    }
+
+    #[test]
+    fn test_array_of_arrays_recursive() {
+        // Array of arrays: matrix containing arrays
+        let rows = vec![json!({
+            "name": "matrix",
+            "data": [[1, 2, 3], [4, 5, 6]]
+        })];
+
+        let children = NestedExtractor::extract(&rows);
+
+        // Should have a 'data' table for the outer array
+        assert!(children.contains_key("data"), "Should have 'data' table");
+
+        let data = &children["data"];
+        // The outer array has 2 elements (each is an inner array)
+        assert_eq!(data.rows.len(), 2, "data table should have 2 rows");
+        assert_eq!(data.columns, vec!["value"]);
+
+        // Each row in data should have "[...]" placeholder since they are arrays
+        assert_eq!(
+            data.rows[0].1[0],
+            Value::String("[...]".to_string()),
+            "First inner array should be placeholder"
+        );
+        assert_eq!(
+            data.rows[1].1[0],
+            Value::String("[...]".to_string()),
+            "Second inner array should be placeholder"
+        );
+
+        // Should have 'data.value' table for the inner arrays
+        assert!(
+            children.contains_key("data.value"),
+            "Should have 'data.value' table for inner arrays"
+        );
+
+        let data_value = &children["data.value"];
+        // Total of 6 elements: [1,2,3] + [4,5,6]
+        assert_eq!(
+            data_value.rows.len(),
+            6,
+            "data.value table should have 6 rows"
+        );
+        assert_eq!(data_value.columns, vec!["value"]);
+
+        // Verify values: first 3 belong to inner array at data row 0
+        assert_eq!(data_value.rows[0].0, 0, "First element from first inner array");
+        assert_eq!(data_value.rows[0].1[0], json!(1));
+        assert_eq!(data_value.rows[1].0, 0);
+        assert_eq!(data_value.rows[1].1[0], json!(2));
+        assert_eq!(data_value.rows[2].0, 0);
+        assert_eq!(data_value.rows[2].1[0], json!(3));
+
+        // Next 3 belong to inner array at data row 1
+        assert_eq!(data_value.rows[3].0, 1, "First element from second inner array");
+        assert_eq!(data_value.rows[3].1[0], json!(4));
+        assert_eq!(data_value.rows[4].0, 1);
+        assert_eq!(data_value.rows[4].1[0], json!(5));
+        assert_eq!(data_value.rows[5].0, 1);
+        assert_eq!(data_value.rows[5].1[0], json!(6));
     }
 }
