@@ -34,12 +34,20 @@ impl CompiledPath {
                     }
                     // Parse index
                     let mut idx_str = String::new();
+                    let mut found_bracket = false;
                     while let Some(&next_c) = chars.peek() {
                         if next_c == ']' {
                             chars.next();
+                            found_bracket = true;
                             break;
                         }
                         idx_str.push(chars.next().unwrap());
+                    }
+                    if !found_bracket {
+                        return Err(JlcatError::InvalidColumnPath(format!(
+                            "unterminated array index in '{}'",
+                            path
+                        )));
                     }
                     let idx: usize = idx_str.parse().map_err(|_| {
                         JlcatError::InvalidColumnPath(format!("invalid index '{}' in '{}'", idx_str, path))
@@ -171,5 +179,25 @@ mod tests {
             "address": {"city": "Nested"}
         });
         assert_eq!(path.get(&row), Some(&json!("Literal")));
+    }
+
+    #[test]
+    fn test_unterminated_array_index_rejected() {
+        // Missing closing bracket should be rejected
+        let result = CompiledPath::compile("items[0");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("unterminated"),
+            "Error should mention unterminated: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_unterminated_nested_array_index_rejected() {
+        // Missing closing bracket in nested path should be rejected
+        let result = CompiledPath::compile("user.items[1.name");
+        assert!(result.is_err());
     }
 }
