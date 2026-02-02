@@ -1,0 +1,128 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  BIN_NAME: jlcat
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux (musl, static)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            ext: ""
+            archive: tar.gz
+
+          # macOS Intel
+          - os: macos-13
+            target: x86_64-apple-darwin
+            ext: ""
+            archive: tar.gz
+
+          # macOS Apple Silicon
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            ext: ""
+            archive: tar.gz
+
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: ".exe"
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Tools for Linux musl (required for static linking)
+      - name: Install musl tools (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      # Slightly speed up dependency builds (small change, big impact)
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          DIST="${{ env.BIN_NAME }}-${VERSION}-${{ matrix.target }}"
+          mkdir -p dist
+          mkdir -p "$DIST"
+          cp "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}${{ matrix.ext }}" "$DIST/"
+          cp README* "$DIST/" 2>/dev/null || true
+          cp LICENSE* "$DIST/" 2>/dev/null || true
+          tar -czf "dist/${DIST}.tar.gz" "$DIST"
+          shasum -a 256 "dist/${DIST}.tar.gz" > "dist/${DIST}.tar.gz.sha256"
+
+      - name: Package (windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $Version = "${env:GITHUB_REF_NAME}"
+          $Dist = "${env:BIN_NAME}-$Version-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+          Copy-Item "target\${{ matrix.target }}\release\${env:BIN_NAME}${{ matrix.ext }}" "$Dist\"
+          if (Test-Path "README.md") { Copy-Item "README.md" "$Dist\" }
+          if (Test-Path "LICENSE") { Copy-Item "LICENSE" "$Dist\" }
+          Compress-Archive -Path "$Dist\*" -DestinationPath "dist\$Dist.zip" -Force
+          $Hash = (Get-FileHash "dist\$Dist.zip" -Algorithm SHA256).Hash.ToLower()
+          "$Hash  $Dist.zip" | Out-File -Encoding ascii "dist\$Dist.zip.sha256"
+
+      - name: Upload artifacts (for release job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+
+  release:
+    name: create release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist_all
+
+      - name: Flatten
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find dist_all -type f -maxdepth 2 -print -exec cp {} dist/ \;
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
