@@ -1,4 +1,5 @@
 mod cli;
+mod core;
 mod error;
 mod input;
 
