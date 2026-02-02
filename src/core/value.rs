@@ -79,16 +79,21 @@ pub fn get_nested_value<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
             continue;
         }
 
-        // Handle array index notation
-        if let Some(idx_start) = part.find('[') {
-            let field = &part[..idx_start];
+        // Handle array index notation (supports multiple indices like matrix[1][0])
+        if let Some(first_bracket) = part.find('[') {
+            let field = &part[..first_bracket];
             if !field.is_empty() {
                 current = current.get(field)?;
             }
 
-            let idx_end = part.find(']')?;
-            let idx: usize = part[idx_start + 1..idx_end].parse().ok()?;
-            current = current.get(idx)?;
+            // Process all [index] pairs in this segment
+            let mut remaining = &part[first_bracket..];
+            while remaining.starts_with('[') {
+                let idx_end = remaining.find(']')?;
+                let idx: usize = remaining[1..idx_end].parse().ok()?;
+                current = current.get(idx)?;
+                remaining = &remaining[idx_end + 1..];
+            }
         } else {
             current = current.get(part)?;
         }
@@ -195,5 +200,28 @@ mod tests {
         // Literal key with bracket notation
         let row = json!({"items[0]": "Literal"});
         assert_eq!(get_nested_value(&row, "items[0]"), Some(&json!("Literal")));
+    }
+
+    #[test]
+    fn test_get_multi_dimensional_array() {
+        // 2D matrix access: matrix[1][0]
+        let row = json!({"matrix": [[1, 2], [3, 4], [5, 6]]});
+        assert_eq!(get_nested_value(&row, "matrix[1][0]"), Some(&json!(3)));
+        assert_eq!(get_nested_value(&row, "matrix[2][1]"), Some(&json!(6)));
+    }
+
+    #[test]
+    fn test_get_triple_nested_array() {
+        // 3D array access: cube[0][1][2]
+        let row = json!({"cube": [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]});
+        assert_eq!(get_nested_value(&row, "cube[0][1][2]"), Some(&json!(6)));
+        assert_eq!(get_nested_value(&row, "cube[1][0][0]"), Some(&json!(7)));
+    }
+
+    #[test]
+    fn test_get_nested_path_with_multi_index() {
+        // Combined dot notation and multi-dimensional array
+        let row = json!({"data": {"matrix": [[1, 2], [3, 4]]}});
+        assert_eq!(get_nested_value(&row, "data.matrix[1][0]"), Some(&json!(3)));
     }
 }
