@@ -1,19 +1,21 @@
+#[allow(dead_code)]
 mod cache;
 mod extractor;
 mod filter;
+#[allow(dead_code)]
 mod path;
+#[allow(dead_code)]
 mod schema;
 mod selector;
 mod sorter;
 mod table;
+#[allow(dead_code)]
 mod value;
 
+#[allow(dead_code)]
 pub use cache::RowCache;
 pub use extractor::{ChildTable, NestedExtractor};
-pub use filter::{FilterCondition, FilterExpr, FilterOp, FullTextSearch};
-pub use path::{CompiledPath, PathSegment};
-pub use schema::{ColumnType, Schema, SchemaInferrer};
+pub use filter::{FilterExpr, FullTextSearch};
 pub use selector::ColumnSelector;
-pub use sorter::{SortKey, Sorter};
+pub use sorter::Sorter;
 pub use table::TableData;
-pub use value::{get_nested_value, SortableValue};

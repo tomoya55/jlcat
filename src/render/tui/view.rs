@@ -82,7 +82,7 @@ fn render_table(frame: &mut Frame, app: &App, area: Rect) {
     let table = Table::new(rows, constraints)
         .header(header)
         .block(Block::default().borders(Borders::ALL).title(title))
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+        .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED));
 
     // We manually handle selection via styling, so use StatefulWidget with empty state
     let mut state = TableState::default();

@@ -24,6 +24,7 @@ impl ColumnSelector {
         self.columns.iter().map(|(name, _)| name.as_str()).collect()
     }
 
+    #[allow(dead_code)]
     pub fn select(&self, row: &Value) -> Vec<(String, Value)> {
         self.columns
             .iter()
@@ -34,6 +35,7 @@ impl ColumnSelector {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub fn select_values(&self, row: &Value) -> Vec<Value> {
         self.columns
             .iter()

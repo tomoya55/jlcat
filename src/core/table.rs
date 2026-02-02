@@ -7,6 +7,7 @@ use serde_json::Value;
 pub struct TableData {
     columns: Vec<String>,
     rows: Vec<Vec<Value>>,
+    #[allow(dead_code)]
     schema: Schema,
 }
 
@@ -45,22 +46,27 @@ impl TableData {
         &self.rows
     }
 
+    #[allow(dead_code)]
     pub fn row_count(&self) -> usize {
         self.rows.len()
     }
 
+    #[allow(dead_code)]
     pub fn column_count(&self) -> usize {
         self.columns.len()
     }
 
+    #[allow(dead_code)]
     pub fn get_cell(&self, row: usize, col: usize) -> Option<&Value> {
         self.rows.get(row).and_then(|r| r.get(col))
     }
 
+    #[allow(dead_code)]
     pub fn get_row(&self, index: usize) -> Option<&[Value]> {
         self.rows.get(index).map(|r| r.as_slice())
     }
 
+    #[allow(dead_code)]
     pub fn schema(&self) -> &Schema {
         &self.schema
     }

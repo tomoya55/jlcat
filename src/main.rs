@@ -8,7 +8,7 @@ use clap::Parser;
 use cli::Cli;
 use core::{ChildTable, ColumnSelector, NestedExtractor, Sorter, TableData};
 use error::{JlcatError, Result};
-use input::{sniff_format, FileSource, InputFormat, InputSource};
+use input::{sniff_format, InputFormat};
 use render::CatRenderer;
 use serde_json::Value;
 use std::io::{self, BufRead, BufReader, Read};
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
                 // No column selection: flatten to show placeholders
                 let flat_rows: Vec<Value> = rows
                     .iter()
-                    .map(|r| NestedExtractor::flatten_row(r))
+                    .map(NestedExtractor::flatten_row)
                     .collect();
                 TableData::from_rows(flat_rows, None)
             };

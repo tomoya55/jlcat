@@ -50,6 +50,7 @@ impl Sorter {
         rows.sort_by(|a, b| self.compare(a, b));
     }
 
+    #[allow(dead_code)]
     pub fn sort_indices(&self, rows: &[Value]) -> Vec<usize> {
         let mut indices: Vec<usize> = (0..rows.len()).collect();
         indices.sort_by(|&i, &j| self.compare(&rows[i], &rows[j]));
@@ -62,8 +63,8 @@ impl Sorter {
             let val_b = key.path.get(b);
 
             // Handle nulls-last for both ascending and descending
-            let a_is_null = val_a.map_or(true, |v| v.is_null());
-            let b_is_null = val_b.map_or(true, |v| v.is_null());
+            let a_is_null = val_a.is_none_or(|v| v.is_null());
+            let b_is_null = val_b.is_none_or(|v| v.is_null());
 
             if a_is_null && !b_is_null {
                 return Ordering::Greater; // null goes last

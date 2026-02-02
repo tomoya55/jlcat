@@ -42,8 +42,8 @@ impl RowCache {
     /// Insert a row into the cache
     pub fn insert(&mut self, index: usize, value: Value) {
         // If already present, update and move to back
-        if self.entries.contains_key(&index) {
-            self.entries.insert(index, value);
+        if let std::collections::hash_map::Entry::Occupied(mut e) = self.entries.entry(index) {
+            e.insert(value);
             self.order.retain(|&i| i != index);
             self.order.push_back(index);
             return;

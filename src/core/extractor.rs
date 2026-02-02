@@ -5,6 +5,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct ChildTable {
     /// Name of the nested field (e.g., "orders", "address")
+    #[allow(dead_code)]
     pub name: String,
     /// Column names for this child table
     pub columns: Vec<String>,
@@ -110,7 +111,7 @@ impl NestedExtractor {
                 .iter()
                 .map(|col| {
                     obj.get(col)
-                        .map(|v| Self::flatten_value(v))
+                        .map(Self::flatten_value)
                         .unwrap_or(Value::Null)
                 })
                 .collect();
@@ -184,7 +185,7 @@ impl NestedExtractor {
                             .iter()
                             .map(|col| {
                                 obj.get(col)
-                                    .map(|v| Self::flatten_value(v))
+                                    .map(Self::flatten_value)
                                     .unwrap_or(Value::Null)
                             })
                             .collect();
