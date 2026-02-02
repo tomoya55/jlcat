@@ -1,9 +1,11 @@
+mod filter;
 mod path;
 mod schema;
 mod selector;
 mod sorter;
 mod value;
 
+pub use filter::{FilterCondition, FilterExpr, FilterOp, FullTextSearch};
 pub use path::{CompiledPath, PathSegment};
 pub use schema::{ColumnType, Schema, SchemaInferrer};
 pub use selector::ColumnSelector;
