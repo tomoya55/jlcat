@@ -1,8 +1,19 @@
+mod cli;
 mod error;
 
+use clap::Parser;
+use cli::Cli;
 use error::Result;
 
 fn main() -> Result<()> {
-    println!("jlcat v0.1.0");
+    let cli = Cli::parse();
+
+    if cli.file.is_none() && atty::is(atty::Stream::Stdin) {
+        eprintln!("Usage: jlcat [OPTIONS] [FILE]");
+        eprintln!("Try 'jlcat --help' for more information.");
+        std::process::exit(1);
+    }
+
+    println!("{:?}", cli);
     Ok(())
 }
