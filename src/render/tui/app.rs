@@ -72,11 +72,33 @@ impl App {
             .map(|f| {
                 f.conditions
                     .iter()
-                    .map(|c| format!("{}{}{}", c.column, c.op.as_str(), c.value))
+                    .map(|c| {
+                        let quoted_value = Self::quote_if_needed(&c.value);
+                        format!("{}{}{}", c.column, c.op.as_str(), quoted_value)
+                    })
                     .collect::<Vec<_>>()
                     .join(" ")
             })
             .unwrap_or_default()
+    }
+
+    /// Quote a filter value if it contains spaces or special characters
+    fn quote_if_needed(value: &str) -> String {
+        // Need quotes if value contains spaces or filter operator characters
+        let needs_quotes = value.contains(' ')
+            || value.contains('=')
+            || value.contains('!')
+            || value.contains('>')
+            || value.contains('<')
+            || value.contains('~');
+
+        if needs_quotes {
+            // Use double quotes, escape any existing double quotes
+            let escaped = value.replace('"', r#"\""#);
+            format!("\"{}\"", escaped)
+        } else {
+            value.to_string()
+        }
     }
 
     /// Get the row at the given visible index
@@ -239,5 +261,42 @@ impl App {
             self.selected_row = self.filtered_indices.len().saturating_sub(1);
         }
         self.scroll_offset = 0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quote_if_needed_simple() {
+        // Simple values don't need quotes
+        assert_eq!(App::quote_if_needed("alice"), "alice");
+        assert_eq!(App::quote_if_needed("123"), "123");
+        assert_eq!(App::quote_if_needed("true"), "true");
+    }
+
+    #[test]
+    fn test_quote_if_needed_with_spaces() {
+        // Values with spaces need quotes
+        assert_eq!(App::quote_if_needed("Alice Smith"), "\"Alice Smith\"");
+        assert_eq!(App::quote_if_needed("hello world"), "\"hello world\"");
+    }
+
+    #[test]
+    fn test_quote_if_needed_with_operators() {
+        // Values containing operator characters need quotes
+        assert_eq!(App::quote_if_needed("a=b"), "\"a=b\"");
+        assert_eq!(App::quote_if_needed("x>y"), "\"x>y\"");
+        assert_eq!(App::quote_if_needed("foo~bar"), "\"foo~bar\"");
+    }
+
+    #[test]
+    fn test_quote_if_needed_with_existing_quotes() {
+        // Existing quotes should be escaped
+        assert_eq!(
+            App::quote_if_needed("say \"hello\""),
+            "\"say \\\"hello\\\"\""
+        );
     }
 }
