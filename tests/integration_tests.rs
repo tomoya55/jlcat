@@ -1,0 +1,128 @@
+use assert_cmd::Command;
+use predicates::prelude::*;
+
+#[test]
+fn test_cat_mode_file() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.arg("tests/fixtures/simple.jsonl")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice"))
+        .stdout(predicate::str::contains("Bob"))
+        .stdout(predicate::str::contains("Charlie"));
+}
+
+#[test]
+fn test_cat_mode_stdin() {
+    let input = r#"{"id": 1, "name": "Test"}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Test"));
+}
+
+#[test]
+fn test_column_selection() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-c", "name", "tests/fixtures/simple.jsonl"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("name"))
+        .stdout(predicate::str::contains("Alice"));
+}
+
+#[test]
+fn test_sort_ascending() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-c", "name,age", "-s", "age", "tests/fixtures/simple.jsonl"])
+        .assert()
+        .success();
+    // Bob (25) should come before Alice (30) should come before Charlie (35)
+}
+
+#[test]
+fn test_sort_descending() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-c", "name,age", "-s=-age", "tests/fixtures/simple.jsonl"])
+        .assert()
+        .success();
+    // Charlie (35) should come first
+}
+
+#[test]
+fn test_json_array_input() {
+    let input = r#"[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("A"))
+        .stdout(predicate::str::contains("B"));
+}
+
+#[test]
+fn test_ascii_style() {
+    let input = r#"{"id": 1}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["--style", "ascii"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("+"))
+        .stdout(predicate::str::contains("-"));
+}
+
+#[test]
+fn test_markdown_style() {
+    let input = r#"{"id": 1}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["--style", "markdown"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("|"));
+}
+
+#[test]
+fn test_lenient_mode() {
+    let input = "invalid json\n{\"id\": 1}";
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["--lenient"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1"))
+        .stderr(predicate::str::contains("warning"));
+}
+
+#[test]
+fn test_strict_mode_error() {
+    let input = "invalid json\n{\"id\": 1}";
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.write_stdin(input).assert().failure();
+}
+
+#[test]
+fn test_nested_column_selection() {
+    let input = r#"{"id": 1, "address": {"city": "Tokyo"}}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-c", "id,address.city"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Tokyo"));
+}
+
+#[test]
+fn test_empty_input() {
+    let input = "";
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.write_stdin(input).assert().success().stdout("");
+}
+
+#[test]
+fn test_file_not_found() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.arg("nonexistent.jsonl").assert().failure();
+}
