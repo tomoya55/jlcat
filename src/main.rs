@@ -56,14 +56,20 @@ fn main() -> Result<()> {
             // Extract nested structures
             let children = NestedExtractor::extract(&rows);
 
-            // Flatten parent rows (replace nested with placeholders)
-            let flat_rows: Vec<Value> = rows
-                .iter()
-                .map(|r| NestedExtractor::flatten_row(r))
-                .collect();
-
-            // Render parent table
-            let parent_table = TableData::from_rows(flat_rows, selector);
+            // For parent table:
+            // - If column selector is provided, use original rows so nested paths resolve
+            // - Otherwise, flatten rows to show placeholders for nested structures
+            let parent_table = if selector.is_some() {
+                // Column selection: use original rows so paths like "address.city" work
+                TableData::from_rows(rows.clone(), selector)
+            } else {
+                // No column selection: flatten to show placeholders
+                let flat_rows: Vec<Value> = rows
+                    .iter()
+                    .map(|r| NestedExtractor::flatten_row(r))
+                    .collect();
+                TableData::from_rows(flat_rows, None)
+            };
             println!("{}", renderer.render(&parent_table));
 
             // Render child tables
