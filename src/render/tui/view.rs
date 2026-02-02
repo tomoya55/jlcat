@@ -174,8 +174,10 @@ fn format_value(value: &Value) -> String {
 
 fn format_value_short(value: &Value) -> String {
     let s = format_value(value);
-    if s.len() > 20 {
-        format!("{}...", &s[..17])
+    let char_count = s.chars().count();
+    if char_count > 20 {
+        let truncated: String = s.chars().take(17).collect();
+        format!("{}...", truncated)
     } else {
         s
     }
