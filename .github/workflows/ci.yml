@@ -59,3 +59,23 @@ jobs:
         if: steps.filter.outputs.deps == 'true'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  changelog:
+    name: Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            changelog:
+              - 'CHANGELOG.md'
+      - name: Install clparse
+        if: steps.filter.outputs.changelog == 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: clparse
+      - name: Validate CHANGELOG.md
+        if: steps.filter.outputs.changelog == 'true'
+        run: clparse CHANGELOG.md > /dev/null
