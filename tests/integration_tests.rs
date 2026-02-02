@@ -207,3 +207,19 @@ fn test_lenient_mode_renders_valid_objects_only() {
         .stdout(predicate::str::contains("Bob"))
         .stdout(predicate::str::contains("string_value").not());
 }
+
+#[test]
+fn test_strict_false_enables_lenient_mode() {
+    // --strict=false should behave like --lenient
+    let input = r#"{"name": "Alice"}
+invalid json line
+{"name": "Bob"}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["--strict=false"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning"))
+        .stdout(predicate::str::contains("Alice"))
+        .stdout(predicate::str::contains("Bob"));
+}

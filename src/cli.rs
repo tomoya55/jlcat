@@ -29,8 +29,8 @@ pub struct Cli {
     #[arg(long, value_enum, default_value = "rounded")]
     pub style: TableStyle,
 
-    /// Exit on invalid JSON line (default)
-    #[arg(long, default_value = "true")]
+    /// Exit on invalid JSON line (default: true)
+    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
     pub strict: bool,
 
     /// Skip invalid JSON lines with warning
@@ -49,6 +49,7 @@ pub enum TableStyle {
 
 impl Cli {
     pub fn is_strict(&self) -> bool {
-        !self.lenient
+        // Honor both flags: strict mode requires --strict=true (default) AND no --lenient
+        self.strict && !self.lenient
     }
 }
