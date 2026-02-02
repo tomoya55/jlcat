@@ -108,6 +108,42 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog for version
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"  # v0.1.0 -> 0.1.0
+
+          # Check if version exists in CHANGELOG.md
+          if ! grep -qE "^## \[?${VERSION}\]?" CHANGELOG.md; then
+            echo "::error::Version ${VERSION} not found in CHANGELOG.md"
+            exit 1
+          fi
+
+          # Extract the section for this version (from ## [version] or ## version to next ## or EOF)
+          NOTES=$(awk -v ver="$VERSION" '
+            /^## \[?[0-9]/ {
+              if (found) exit
+              if ($0 ~ "^## \\[?" ver "\\]?") { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            echo "::error::No release notes found for version ${VERSION}"
+            exit 1
+          fi
+
+          # Output multiline string
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -118,11 +154,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          find dist_all -type f -maxdepth 2 -print -exec cp {} dist/ \;
+          find dist_all -maxdepth 2 -type f -exec cp {} dist/ \;
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
+          body: ${{ steps.changelog.outputs.notes }}
           files: |
             dist/*
-          generate_release_notes: true
