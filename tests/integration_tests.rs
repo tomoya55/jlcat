@@ -168,6 +168,19 @@ fn test_recursive_no_nested() {
 }
 
 #[test]
+fn test_recursive_with_nested_column_selection() {
+    // Nested column selection should work in recursive mode
+    let input = r#"{"id": 1, "address": {"city": "Tokyo", "zip": "100"}}"#;
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.args(["-r", "-c", "id,address.city"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Tokyo"))
+        .stdout(predicate::str::contains("1"));
+}
+
+#[test]
 fn test_strict_mode_rejects_non_object_jsonl() {
     // Strict mode (default) should reject non-object JSON values
     let input = "1\n\"foo\"\n[1,2,3]";
