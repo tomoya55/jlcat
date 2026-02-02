@@ -41,13 +41,13 @@ fn golden_simple_jsonl() {
     );
 }
 
-/// Test JSON array input (via stdin, as array detection only works for stdin)
+/// Test JSON array input from file
 #[test]
 fn golden_json_array() {
-    let input = r#"[{"product": "Apple", "price": 1.50},{"product": "Banana", "price": 0.75}]"#;
+    let input = fixtures_dir().join("array.json");
 
     let mut cmd = Command::cargo_bin("jlcat").unwrap();
-    let output = cmd.write_stdin(input).output().unwrap();
+    let output = cmd.arg(&input).output().unwrap();
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -58,6 +58,7 @@ fn golden_json_array() {
     // Verify data
     assert!(stdout.contains("Apple"), "Should contain 'Apple'");
     assert!(stdout.contains("Banana"), "Should contain 'Banana'");
+    assert!(stdout.contains("Cherry"), "Should contain 'Cherry'");
 }
 
 /// Test nested object display
