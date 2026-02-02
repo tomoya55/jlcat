@@ -131,8 +131,22 @@ where
         if line.trim().is_empty() {
             continue;
         }
-        match serde_json::from_str(&line) {
-            Ok(value) => rows.push(value),
+        match serde_json::from_str::<Value>(&line) {
+            Ok(value) => {
+                if value.is_object() {
+                    rows.push(value);
+                } else if strict {
+                    return Err(JlcatError::JsonParse {
+                        line: line_num + 1,
+                        message: "expected JSON object, got non-object value".to_string(),
+                    });
+                } else {
+                    eprintln!(
+                        "jlcat: warning: line {}: expected JSON object, skipping",
+                        line_num + 1
+                    );
+                }
+            }
             Err(e) => {
                 if strict {
                     return Err(JlcatError::JsonParse {
