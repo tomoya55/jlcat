@@ -22,11 +22,16 @@
 
 ### 2. 入力形式サポート
 
+**Peek-based検出（先頭バイトのみ）:**
+- 最初の非空白文字が `[` → JSON配列としてストリームパース
+- 最初の非空白文字が `{` → JSONLとして処理（単一オブジェクトもJSONL 1行として正しく処理される）
+
 | 形式 | 検出方法 | 処理 |
 |------|----------|------|
-| JSONL | 各行が独立JSON | 行オフセットでインデックス化 |
-| JSON配列 | `[` で始まる | ストリームパースで各要素を行として扱う |
-| JSON単一オブジェクト | `{` で始まり配列でない | 1行のテーブルとして表示 |
+| JSON配列 | 先頭が `[` | ストリームパースで各要素を行として扱う |
+| JSONL / 単一オブジェクト | 先頭が `{` | 行単位でパース（単一オブジェクトは1行JSONLとして扱う） |
+
+> **設計判断**: Pretty-printされた単一JSONオブジェクトを誤検出するリスクを避けるため、`{`で始まる入力は全てJSONLとして扱う。2行目以降でパースエラーになった場合は`--lenient`でスキップするか、`--strict`でエラー終了。
 
 **stdin処理:**
 - Streamingパス: そのままストリーム処理
@@ -38,6 +43,8 @@
 - **カラム順序**: first-seen順（`-c`指定時はその順序を優先）
 - **型追跡**: 各カラムごとに `null/number/bool/string/object/array` の出現カウント
 - **Streamingパスでの制約**: 最初の行でスキーマ確定、後続行の新カラムは無視
+
+> **注意（ヘルプにも記載）**: Streamingモード（`-s`/`-r`/`-i`なし）では、最初の行で検出されたカラムのみ表示されます。後続行に新しいカラムがあっても無視されます。全カラムを表示するには`-i`（TUIモード）を使用するか、`-c`でカラムを明示的に指定してください。
 
 ### 4. ソート仕様
 
@@ -170,7 +177,8 @@ jlcat/
 │   ├── core/
 │   │   ├── mod.rs
 │   │   ├── schema.rs        # Schema, ColumnType, SchemaInferrer
-│   │   ├── value.rs         # JsonValue ラッパー（ソート用Ord実装）
+│   │   ├── path.rs          # CompiledPath（事前パースされたアクセスパス）
+│   │   ├── value.rs         # SortableValue（ソート用Ord実装）
 │   │   ├── selector.rs      # ColumnSelector（ドット記法パース）
 │   │   ├── extractor.rs     # NestedExtractor（-r処理）
 │   │   ├── sorter.rs        # Sorter（安定ソート、nulls last）
@@ -1024,13 +1032,142 @@ git commit -m "feat: add schema inference with type tracking"
 
 ---
 
-#### Task 3.2: JsonValue ラッパー（ソート用）
+#### Task 3.2: CompiledPath + SortableValue（パフォーマンス最適化）
+
+> **設計判断**: ドット記法パス（例: `address.city`）を毎行で文字列分割するのは非効率。構築時に事前パースして`Vec<PathSegment>`に変換し、ループ内では分割処理をスキップ。
 
 **Files:**
+- Create: `src/core/path.rs`
 - Create: `src/core/value.rs`
 - Modify: `src/core/mod.rs`
 
-**Step 1: 失敗するテスト作成**
+**Step 1: 失敗するテスト作成（CompiledPath）**
+
+```rust
+// src/core/path.rs の末尾
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_compile_simple_path() {
+        let path = CompiledPath::compile("name").unwrap();
+        assert_eq!(path.segments, vec![PathSegment::Key("name".into())]);
+    }
+
+    #[test]
+    fn test_compile_nested_path() {
+        let path = CompiledPath::compile("address.city").unwrap();
+        assert_eq!(path.segments, vec![
+            PathSegment::Key("address".into()),
+            PathSegment::Key("city".into()),
+        ]);
+    }
+
+    #[test]
+    fn test_compile_array_index() {
+        let path = CompiledPath::compile("orders[0].item").unwrap();
+        assert_eq!(path.segments, vec![
+            PathSegment::Key("orders".into()),
+            PathSegment::Index(0),
+            PathSegment::Key("item".into()),
+        ]);
+    }
+
+    #[test]
+    fn test_get_value() {
+        let path = CompiledPath::compile("address.city").unwrap();
+        let row = json!({"address": {"city": "Tokyo"}});
+        assert_eq!(path.get(&row), Some(&json!("Tokyo")));
+    }
+
+    #[test]
+    fn test_get_array_value() {
+        let path = CompiledPath::compile("items[1].name").unwrap();
+        let row = json!({"items": [{"name": "A"}, {"name": "B"}]});
+        assert_eq!(path.get(&row), Some(&json!("B")));
+    }
+}
+```
+
+**Step 2: CompiledPath実装**
+
+```rust
+// src/core/path.rs
+use crate::error::{JlcatError, Result};
+use serde_json::Value;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PathSegment {
+    Key(String),
+    Index(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledPath {
+    pub segments: Vec<PathSegment>,
+    pub original: String,
+}
+
+impl CompiledPath {
+    pub fn compile(path: &str) -> Result<Self> {
+        let mut segments = Vec::new();
+
+        for part in path.split('.') {
+            if part.is_empty() {
+                continue;
+            }
+
+            // Handle array index notation: field[0] or [0]
+            if let Some(idx_start) = part.find('[') {
+                let field = &part[..idx_start];
+                if !field.is_empty() {
+                    segments.push(PathSegment::Key(field.to_string()));
+                }
+
+                let idx_end = part.find(']').ok_or_else(|| {
+                    JlcatError::InvalidColumnPath(format!("unclosed bracket in '{}'", path))
+                })?;
+
+                let idx: usize = part[idx_start + 1..idx_end].parse().map_err(|_| {
+                    JlcatError::InvalidColumnPath(format!("invalid index in '{}'", path))
+                })?;
+
+                segments.push(PathSegment::Index(idx));
+
+                // Handle trailing parts after ]
+                let rest = &part[idx_end + 1..];
+                if !rest.is_empty() && rest.starts_with('.') {
+                    // Will be handled by next iteration
+                }
+            } else {
+                segments.push(PathSegment::Key(part.to_string()));
+            }
+        }
+
+        Ok(Self {
+            segments,
+            original: path.to_string(),
+        })
+    }
+
+    pub fn get<'a>(&self, value: &'a Value) -> Option<&'a Value> {
+        let mut current = value;
+
+        for segment in &self.segments {
+            current = match segment {
+                PathSegment::Key(key) => current.get(key)?,
+                PathSegment::Index(idx) => current.get(idx)?,
+            };
+        }
+
+        Some(current)
+    }
+}
+```
+
+**Step 3: 失敗するテスト作成（SortableValue）**
 
 ```rust
 // src/core/value.rs の末尾
@@ -1082,7 +1219,7 @@ mod tests {
 }
 ```
 
-**Step 2: SortableValue実装**
+**Step 4: SortableValue実装**
 
 ```rust
 // src/core/value.rs
@@ -1147,57 +1284,38 @@ impl<'a> Ord for SortableValue<'a> {
         }
     }
 }
-
-/// Get a nested value using dot notation path
-pub fn get_nested_value<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
-    let mut current = value;
-
-    for part in path.split('.') {
-        // Handle array index notation: field[0]
-        if let Some(idx_start) = part.find('[') {
-            let field = &part[..idx_start];
-            let idx_end = part.find(']')?;
-            let idx: usize = part[idx_start + 1..idx_end].parse().ok()?;
-
-            if !field.is_empty() {
-                current = current.get(field)?;
-            }
-            current = current.get(idx)?;
-        } else {
-            current = current.get(part)?;
-        }
-    }
-
-    Some(current)
-}
 ```
 
-**Step 3: mod.rs更新**
+**Step 5: mod.rs更新**
 
 ```rust
 // src/core/mod.rs
+mod path;
 mod schema;
 mod value;
 
+pub use path::{CompiledPath, PathSegment};
 pub use schema::{ColumnType, Schema, SchemaInferrer};
-pub use value::{get_nested_value, SortableValue};
+pub use value::SortableValue;
 ```
 
-**Step 4: テスト実行**
+**Step 6: テスト実行**
 
-Run: `cargo test value::tests`
+Run: `cargo test path::tests value::tests`
 Expected: PASS
 
-**Step 5: コミット**
+**Step 7: コミット**
 
 ```bash
-git add src/core/value.rs src/core/mod.rs
-git commit -m "feat: add SortableValue with nulls-last ordering"
+git add src/core/path.rs src/core/value.rs src/core/mod.rs
+git commit -m "feat: add CompiledPath and SortableValue for optimized access"
 ```
 
 ---
 
 #### Task 3.3: カラムセレクター
+
+> **パフォーマンス**: CompiledPathを使用してパスを事前コンパイル。selectループ内での文字列分割を回避。
 
 **Files:**
 - Create: `src/core/selector.rs`
@@ -1214,7 +1332,7 @@ mod tests {
 
     #[test]
     fn test_select_simple_columns() {
-        let selector = ColumnSelector::new(vec!["id".into(), "name".into()]);
+        let selector = ColumnSelector::new(vec!["id".into(), "name".into()]).unwrap();
         let row = json!({"id": 1, "name": "Alice", "age": 30});
 
         let selected = selector.select(&row);
@@ -1226,7 +1344,7 @@ mod tests {
 
     #[test]
     fn test_select_nested_columns() {
-        let selector = ColumnSelector::new(vec!["id".into(), "address.city".into()]);
+        let selector = ColumnSelector::new(vec!["id".into(), "address.city".into()]).unwrap();
         let row = json!({"id": 1, "address": {"city": "Tokyo", "zip": "100"}});
 
         let selected = selector.select(&row);
@@ -1238,7 +1356,7 @@ mod tests {
 
     #[test]
     fn test_select_missing_column() {
-        let selector = ColumnSelector::new(vec!["id".into(), "missing".into()]);
+        let selector = ColumnSelector::new(vec!["id".into(), "missing".into()]).unwrap();
         let row = json!({"id": 1});
 
         let selected = selector.select(&row);
@@ -1249,35 +1367,42 @@ mod tests {
 }
 ```
 
-**Step 2: ColumnSelector実装**
+**Step 2: ColumnSelector実装（CompiledPath使用）**
 
 ```rust
 // src/core/selector.rs
-use super::value::get_nested_value;
+use super::path::CompiledPath;
+use crate::error::Result;
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub struct ColumnSelector {
-    columns: Vec<String>,
+    columns: Vec<(String, CompiledPath)>,  // (original_name, compiled_path)
 }
 
 impl ColumnSelector {
-    pub fn new(columns: Vec<String>) -> Self {
-        Self { columns }
+    pub fn new(columns: Vec<String>) -> Result<Self> {
+        let compiled: Result<Vec<_>> = columns
+            .into_iter()
+            .map(|col| {
+                let path = CompiledPath::compile(&col)?;
+                Ok((col, path))
+            })
+            .collect();
+
+        Ok(Self { columns: compiled? })
     }
 
-    pub fn columns(&self) -> &[String] {
-        &self.columns
+    pub fn columns(&self) -> Vec<&str> {
+        self.columns.iter().map(|(name, _)| name.as_str()).collect()
     }
 
     pub fn select(&self, row: &Value) -> Vec<(String, Value)> {
         self.columns
             .iter()
-            .map(|col| {
-                let value = get_nested_value(row, col)
-                    .cloned()
-                    .unwrap_or(Value::Null);
-                (col.clone(), value)
+            .map(|(name, path)| {
+                let value = path.get(row).cloned().unwrap_or(Value::Null);
+                (name.clone(), value)
             })
             .collect()
     }
@@ -1313,6 +1438,8 @@ git commit -m "feat: add ColumnSelector with dot notation support"
 
 #### Task 3.4: ソーター
 
+> **パフォーマンス**: CompiledPathを使用してソートキーを事前コンパイル。compareループ内での文字列分割を回避。
+
 **Files:**
 - Create: `src/core/sorter.rs`
 - Modify: `src/core/mod.rs`
@@ -1329,11 +1456,11 @@ mod tests {
     #[test]
     fn test_parse_sort_key() {
         let key = SortKey::parse("name").unwrap();
-        assert_eq!(key.column, "name");
+        assert_eq!(key.path.original, "name");
         assert!(!key.descending);
 
         let key = SortKey::parse("-age").unwrap();
-        assert_eq!(key.column, "age");
+        assert_eq!(key.path.original, "age");
         assert!(key.descending);
     }
 
@@ -1407,18 +1534,19 @@ mod tests {
 }
 ```
 
-**Step 2: Sorter実装**
+**Step 2: Sorter実装（CompiledPath使用）**
 
 ```rust
 // src/core/sorter.rs
-use super::value::{get_nested_value, SortableValue};
+use super::path::CompiledPath;
+use super::value::SortableValue;
 use crate::error::{JlcatError, Result};
 use serde_json::Value;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone)]
 pub struct SortKey {
-    pub column: String,
+    pub path: CompiledPath,  // 事前コンパイル済みパス
     pub descending: bool,
 }
 
@@ -1429,16 +1557,17 @@ impl SortKey {
         }
 
         let (descending, column) = if let Some(col) = s.strip_prefix('-') {
-            (true, col.to_string())
+            (true, col)
         } else {
-            (false, s.to_string())
+            (false, s)
         };
 
         if column.is_empty() {
             return Err(JlcatError::InvalidSortKey("empty column name".into()));
         }
 
-        Ok(Self { column, descending })
+        let path = CompiledPath::compile(column)?;
+        Ok(Self { path, descending })
     }
 }
 
@@ -1469,8 +1598,9 @@ impl Sorter {
 
     fn compare(&self, a: &Value, b: &Value) -> Ordering {
         for key in &self.keys {
-            let val_a = get_nested_value(a, &key.column);
-            let val_b = get_nested_value(b, &key.column);
+            // CompiledPath.get() を使用（文字列分割なし）
+            let val_a = key.path.get(a);
+            let val_b = key.path.get(b);
 
             let ord = match (val_a, val_b) {
                 (Some(va), Some(vb)) => {
@@ -1534,6 +1664,8 @@ git commit -m "feat: add Sorter with multi-key and nulls-last support"
 ---
 
 #### Task 3.5: フィルターパーサー
+
+> **将来の拡張**: 現在の手書きパーサーはv1の構文には十分。OR演算子や括弧によるグルーピングなど複雑な構文を追加する場合は、`nom`や`chumsky`などのパーサーコンビネータへの移行を検討。
 
 **Files:**
 - Create: `src/core/filter.rs`
@@ -1609,11 +1741,11 @@ mod tests {
 }
 ```
 
-**Step 2: Filter実装**
+**Step 2: Filter実装（CompiledPath使用）**
 
 ```rust
 // src/core/filter.rs
-use super::value::get_nested_value;
+use super::path::CompiledPath;
 use crate::error::{JlcatError, Result};
 use serde_json::Value;
 
@@ -1631,14 +1763,14 @@ pub enum FilterOp {
 
 #[derive(Debug, Clone)]
 pub struct FilterCondition {
-    pub column: String,
+    pub path: CompiledPath,  // 事前コンパイル済みパス
     pub op: FilterOp,
     pub value: String,
 }
 
 impl FilterCondition {
     fn matches(&self, row: &Value) -> bool {
-        let row_value = get_nested_value(row, &self.column);
+        let row_value = self.path.get(row);  // CompiledPath.get() を使用
 
         match &self.op {
             FilterOp::Eq => self.matches_eq(row_value),
@@ -1787,7 +1919,8 @@ impl FilterExpr {
                 val
             };
 
-            conditions.push(FilterCondition { column, op, value });
+            let path = CompiledPath::compile(&column)?;
+            conditions.push(FilterCondition { path, op, value });
         }
 
         Ok(Self { conditions })
