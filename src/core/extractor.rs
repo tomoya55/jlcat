@@ -24,6 +24,25 @@ impl ChildTable {
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
+
+    /// Get columns with _parent_row prepended
+    pub fn columns_with_parent(&self) -> Vec<String> {
+        let mut cols = vec!["_parent_row".to_string()];
+        cols.extend(self.columns.clone());
+        cols
+    }
+
+    /// Get rows as Vec<Vec<Value>> with parent row index as first column
+    pub fn rows_with_parent(&self) -> Vec<Vec<Value>> {
+        self.rows
+            .iter()
+            .map(|(parent_idx, values)| {
+                let mut row = vec![Value::Number((*parent_idx as i64).into())];
+                row.extend(values.clone());
+                row
+            })
+            .collect()
+    }
 }
 
 /// Extracts nested objects and arrays from JSON rows into child tables
@@ -262,5 +281,30 @@ mod tests {
         assert_eq!(meta.rows.len(), 2); // Only rows with meta
         assert!(meta.columns.contains(&"type".to_string()));
         assert!(meta.columns.contains(&"extra".to_string()));
+    }
+
+    #[test]
+    fn test_columns_with_parent() {
+        let rows = vec![json!({"id": 1, "address": {"city": "Tokyo"}})];
+        let children = NestedExtractor::extract(&rows);
+        let address = &children["address"];
+
+        let cols = address.columns_with_parent();
+        assert_eq!(cols[0], "_parent_row");
+        assert!(cols.contains(&"city".to_string()));
+    }
+
+    #[test]
+    fn test_rows_with_parent() {
+        let rows = vec![
+            json!({"id": 1, "items": [{"name": "A"}]}),
+            json!({"id": 2, "items": [{"name": "B"}]}),
+        ];
+        let children = NestedExtractor::extract(&rows);
+        let items = &children["items"];
+
+        let rows_with_parent = items.rows_with_parent();
+        assert_eq!(rows_with_parent[0][0], json!(0)); // parent row 0
+        assert_eq!(rows_with_parent[1][0], json!(1)); // parent row 1
     }
 }
