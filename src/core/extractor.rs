@@ -33,12 +33,18 @@ impl ChildTable {
     }
 
     /// Get rows as Vec<Vec<Value>> with parent row index as first column
+    /// Pads short rows with nulls to match column count (for heterogeneous arrays)
     pub fn rows_with_parent(&self) -> Vec<Vec<Value>> {
+        let col_count = self.columns.len();
         self.rows
             .iter()
             .map(|(parent_idx, values)| {
                 let mut row = vec![Value::Number((*parent_idx as i64).into())];
                 row.extend(values.clone());
+                // Pad with nulls if row is shorter than expected
+                while row.len() < col_count + 1 {
+                    row.push(Value::Null);
+                }
                 row
             })
             .collect()
@@ -132,12 +138,35 @@ impl NestedExtractor {
                     child.rows.push((row_idx, values));
                 }
                 _ => {
-                    // For primitive arrays, use a single "value" column
+                    // For primitive arrays, use a "value" column
                     if !child.columns.contains(&"value".to_string()) {
                         child.columns.push("value".to_string());
                     }
-                    child.rows.push((row_idx, vec![element.clone()]));
+
+                    // Build row with nulls for all columns except "value"
+                    let values: Vec<Value> = child
+                        .columns
+                        .iter()
+                        .map(|col| {
+                            if col == "value" {
+                                element.clone()
+                            } else {
+                                Value::Null
+                            }
+                        })
+                        .collect();
+
+                    child.rows.push((row_idx, values));
                 }
+            }
+        }
+
+        // Normalize all rows to have the same number of columns
+        // (earlier rows may be shorter if columns were added later)
+        let col_count = child.columns.len();
+        for (_, values) in &mut child.rows {
+            while values.len() < col_count {
+                values.push(Value::Null);
             }
         }
     }
@@ -306,5 +335,48 @@ mod tests {
         let rows_with_parent = items.rows_with_parent();
         assert_eq!(rows_with_parent[0][0], json!(0)); // parent row 0
         assert_eq!(rows_with_parent[1][0], json!(1)); // parent row 1
+    }
+
+    #[test]
+    fn test_heterogeneous_array() {
+        // Array mixing objects and primitives
+        let rows = vec![json!({
+            "id": 1,
+            "items": [{"name": "A"}, "B", {"name": "C"}]
+        })];
+
+        let children = NestedExtractor::extract(&rows);
+        let items = &children["items"];
+
+        // Should have both "name" and "value" columns
+        assert!(items.columns.contains(&"name".to_string()));
+        assert!(items.columns.contains(&"value".to_string()));
+        assert_eq!(items.rows.len(), 3);
+
+        // Each row should have the same number of values as columns
+        for (_, values) in &items.rows {
+            assert_eq!(
+                values.len(),
+                items.columns.len(),
+                "Row values should match column count"
+            );
+        }
+
+        // Object rows should have null in "value" column
+        // Primitive rows should have null in "name" column
+        let name_idx = items.columns.iter().position(|c| c == "name").unwrap();
+        let value_idx = items.columns.iter().position(|c| c == "value").unwrap();
+
+        // First row: object {"name": "A"}
+        assert_eq!(items.rows[0].1[name_idx], json!("A"));
+        assert_eq!(items.rows[0].1[value_idx], Value::Null);
+
+        // Second row: primitive "B"
+        assert_eq!(items.rows[1].1[name_idx], Value::Null);
+        assert_eq!(items.rows[1].1[value_idx], json!("B"));
+
+        // Third row: object {"name": "C"}
+        assert_eq!(items.rows[2].1[name_idx], json!("C"));
+        assert_eq!(items.rows[2].1[value_idx], Value::Null);
     }
 }
