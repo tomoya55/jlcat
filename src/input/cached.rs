@@ -19,7 +19,10 @@ impl CachedReader<File> {
     }
 
     /// Create a CachedReader from a file path with custom cache size
-    pub fn from_path_with_cache_size(path: &std::path::Path, cache_size: usize) -> io::Result<Self> {
+    pub fn from_path_with_cache_size(
+        path: &std::path::Path,
+        cache_size: usize,
+    ) -> io::Result<Self> {
         let indexed = IndexedReader::from_path(path)?;
         Ok(Self {
             indexed,

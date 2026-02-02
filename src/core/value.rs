@@ -169,7 +169,10 @@ mod tests {
     #[test]
     fn test_get_nested_deep() {
         let row = json!({"address": {"city": "Tokyo"}});
-        assert_eq!(get_nested_value(&row, "address.city"), Some(&json!("Tokyo")));
+        assert_eq!(
+            get_nested_value(&row, "address.city"),
+            Some(&json!("Tokyo"))
+        );
     }
 
     #[test]
@@ -182,7 +185,10 @@ mod tests {
     fn test_get_literal_dotted_key() {
         // When column selection flattens "address.city" into a literal key
         let row = json!({"address.city": "Tokyo"});
-        assert_eq!(get_nested_value(&row, "address.city"), Some(&json!("Tokyo")));
+        assert_eq!(
+            get_nested_value(&row, "address.city"),
+            Some(&json!("Tokyo"))
+        );
     }
 
     #[test]
@@ -192,7 +198,10 @@ mod tests {
             "address.city": "Literal",
             "address": {"city": "Nested"}
         });
-        assert_eq!(get_nested_value(&row, "address.city"), Some(&json!("Literal")));
+        assert_eq!(
+            get_nested_value(&row, "address.city"),
+            Some(&json!("Literal"))
+        );
     }
 
     #[test]

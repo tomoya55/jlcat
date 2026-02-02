@@ -40,7 +40,7 @@ proptest! {
     // Test that sorting is deterministic - same input always gives same output
     #[test]
     fn sort_is_deterministic(rows in json_rows_strategy(1, 50)) {
-        
+
 
         let sorter = make_sorter("age");
 
@@ -56,7 +56,7 @@ proptest! {
     // Test that sorting is idempotent - sorting twice gives same result
     #[test]
     fn sort_is_idempotent(rows in json_rows_strategy(1, 50)) {
-        
+
 
         let sorter = make_sorter("age");
 
@@ -72,7 +72,7 @@ proptest! {
     // Test that sorting preserves row count
     #[test]
     fn sort_preserves_count(rows in json_rows_strategy(0, 100)) {
-        
+
 
         let original_count = rows.len();
         let mut sorted = rows;
@@ -161,7 +161,7 @@ proptest! {
     // Test that descending sort reverses ascending sort
     #[test]
     fn descending_reverses_ascending(mut rows in json_rows_strategy(2, 30)) {
-        
+
 
         // Only test with unique ages to ensure deterministic ordering
         for (i, row) in rows.iter_mut().enumerate() {
@@ -252,8 +252,6 @@ fn test_single_row() {
 
 #[test]
 fn test_rows_with_nulls() {
-    
-
     let rows = vec![
         json!({"id": 1, "name": "alice", "age": 30}),
         json!({"id": 2, "name": null, "age": 25}),

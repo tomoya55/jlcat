@@ -160,10 +160,7 @@ mod tests {
 
     #[test]
     fn test_mixed_types() {
-        let rows = vec![
-            json!({"value": 1}),
-            json!({"value": "string"}),
-        ];
+        let rows = vec![json!({"value": 1}), json!({"value": "string"})];
 
         let schema = SchemaInferrer::infer(&rows);
 

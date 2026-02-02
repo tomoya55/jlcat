@@ -204,11 +204,7 @@ mod tests {
 
     #[test]
     fn test_sort_indices() {
-        let rows = vec![
-            json!({"id": 3}),
-            json!({"id": 1}),
-            json!({"id": 2}),
-        ];
+        let rows = vec![json!({"id": 3}), json!({"id": 1}), json!({"id": 2})];
 
         let sorter = Sorter::new(vec![SortKey::parse("id").unwrap()]);
         let indices = sorter.sort_indices(&rows);

@@ -136,7 +136,12 @@ impl NestedExtractor {
         for (nested_path, value, this_row_idx) in nested_to_process {
             match &value {
                 Value::Object(nested_obj) => {
-                    Self::extract_object_recursive(children, &nested_path, this_row_idx, nested_obj);
+                    Self::extract_object_recursive(
+                        children,
+                        &nested_path,
+                        this_row_idx,
+                        nested_obj,
+                    );
                 }
                 Value::Array(arr) => {
                     Self::extract_array_recursive(children, &nested_path, this_row_idx, arr);
@@ -193,7 +198,11 @@ impl NestedExtractor {
                             match value {
                                 Value::Object(_) | Value::Array(_) => {
                                     let nested_path = format!("{}.{}", path, key);
-                                    nested_to_process.push((nested_path, value.clone(), this_row_idx));
+                                    nested_to_process.push((
+                                        nested_path,
+                                        value.clone(),
+                                        this_row_idx,
+                                    ));
                                 }
                                 _ => {}
                             }
@@ -225,7 +234,11 @@ impl NestedExtractor {
 
                         // Queue the nested array for recursive processing
                         let nested_path = format!("{}.value", path);
-                        nested_to_process.push((nested_path, Value::Array(inner_arr.clone()), this_row_idx));
+                        nested_to_process.push((
+                            nested_path,
+                            Value::Array(inner_arr.clone()),
+                            this_row_idx,
+                        ));
                     }
                     _ => {
                         // For primitives, use a "value" column
@@ -555,7 +568,10 @@ mod tests {
         let children = NestedExtractor::extract(&rows);
 
         // Should have child tables for orders and orders.shipping
-        assert!(children.contains_key("orders"), "Should have 'orders' table");
+        assert!(
+            children.contains_key("orders"),
+            "Should have 'orders' table"
+        );
         assert!(
             children.contains_key("orders.shipping"),
             "Should have 'orders.shipping' table"
@@ -621,8 +637,14 @@ mod tests {
         let shipping = &children["orders.shipping"];
 
         // orders table: both rows reference parent row 0 (top-level)
-        assert_eq!(orders.rows[0].0, 0, "First order should reference top-level row 0");
-        assert_eq!(orders.rows[1].0, 0, "Second order should reference top-level row 0");
+        assert_eq!(
+            orders.rows[0].0, 0,
+            "First order should reference top-level row 0"
+        );
+        assert_eq!(
+            orders.rows[1].0, 0,
+            "Second order should reference top-level row 0"
+        );
 
         // orders.shipping table: each shipping references its ORDER row, not top-level
         // First shipping (express) belongs to orders row 0
@@ -674,7 +696,10 @@ mod tests {
         assert_eq!(user.rows[1].0, 1, "Bob's user references top row 1");
 
         // address rows reference their user row
-        assert_eq!(address.rows[0].0, 0, "Alice's address references user row 0");
+        assert_eq!(
+            address.rows[0].0, 0,
+            "Alice's address references user row 0"
+        );
         assert_eq!(address.rows[1].0, 1, "Bob's address references user row 1");
 
         // coordinates rows reference their address row
@@ -728,7 +753,10 @@ mod tests {
         assert_eq!(data_value.columns, vec!["value"]);
 
         // Verify values: first 3 belong to inner array at data row 0
-        assert_eq!(data_value.rows[0].0, 0, "First element from first inner array");
+        assert_eq!(
+            data_value.rows[0].0, 0,
+            "First element from first inner array"
+        );
         assert_eq!(data_value.rows[0].1[0], json!(1));
         assert_eq!(data_value.rows[1].0, 0);
         assert_eq!(data_value.rows[1].1[0], json!(2));
@@ -736,7 +764,10 @@ mod tests {
         assert_eq!(data_value.rows[2].1[0], json!(3));
 
         // Next 3 belong to inner array at data row 1
-        assert_eq!(data_value.rows[3].0, 1, "First element from second inner array");
+        assert_eq!(
+            data_value.rows[3].0, 1,
+            "First element from second inner array"
+        );
         assert_eq!(data_value.rows[3].1[0], json!(4));
         assert_eq!(data_value.rows[4].0, 1);
         assert_eq!(data_value.rows[4].1[0], json!(5));

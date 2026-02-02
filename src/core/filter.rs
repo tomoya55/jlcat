@@ -163,9 +163,7 @@ impl FilterExpr {
                             FilterOp::NotContains
                         }
                         _ => {
-                            return Err(JlcatError::InvalidFilter(
-                                "expected = or ~ after !".into(),
-                            ))
+                            return Err(JlcatError::InvalidFilter("expected = or ~ after !".into()))
                         }
                     }
                 }

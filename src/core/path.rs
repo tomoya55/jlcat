@@ -50,7 +50,10 @@ impl CompiledPath {
                         )));
                     }
                     let idx: usize = idx_str.parse().map_err(|_| {
-                        JlcatError::InvalidColumnPath(format!("invalid index '{}' in '{}'", idx_str, path))
+                        JlcatError::InvalidColumnPath(format!(
+                            "invalid index '{}' in '{}'",
+                            idx_str, path
+                        ))
                     })?;
                     segments.push(PathSegment::Index(idx));
                 }

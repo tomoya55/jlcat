@@ -73,11 +73,7 @@ fn large_file_sorted() {
 
     let mut cmd = Command::cargo_bin("jlcat").unwrap();
     let start = Instant::now();
-    let output = cmd
-        .arg("-s=score")
-        .arg(temp_file.path())
-        .output()
-        .unwrap();
+    let output = cmd.arg("-s=score").arg(temp_file.path()).output().unwrap();
     let duration = start.elapsed();
 
     assert!(output.status.success(), "Should succeed with sorting");
@@ -103,7 +99,10 @@ fn large_file_column_selection() {
         .unwrap();
     let duration = start.elapsed();
 
-    assert!(output.status.success(), "Should succeed with column selection");
+    assert!(
+        output.status.success(),
+        "Should succeed with column selection"
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Should have selected columns
@@ -211,13 +210,21 @@ fn large_file_memory_efficiency() {
     // Both should complete successfully
     let mut cmd = Command::cargo_bin("jlcat").unwrap();
     assert!(
-        cmd.arg(small_file.path()).output().unwrap().status.success(),
+        cmd.arg(small_file.path())
+            .output()
+            .unwrap()
+            .status
+            .success(),
         "Small file should succeed"
     );
 
     let mut cmd = Command::cargo_bin("jlcat").unwrap();
     assert!(
-        cmd.arg(large_file.path()).output().unwrap().status.success(),
+        cmd.arg(large_file.path())
+            .output()
+            .unwrap()
+            .status
+            .success(),
         "Large file should succeed"
     );
 }

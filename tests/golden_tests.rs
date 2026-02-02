@@ -52,7 +52,10 @@ fn golden_json_array() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Verify columns
-    assert!(stdout.contains("product"), "Should contain 'product' column");
+    assert!(
+        stdout.contains("product"),
+        "Should contain 'product' column"
+    );
     assert!(stdout.contains("price"), "Should contain 'price' column");
 
     // Verify data
@@ -72,7 +75,10 @@ fn golden_nested_jsonl() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Nested objects should show as {...}
-    assert!(stdout.contains("{...}"), "Nested objects should show as {{...}}");
+    assert!(
+        stdout.contains("{...}"),
+        "Nested objects should show as {{...}}"
+    );
     assert!(stdout.contains("id"), "Should contain 'id' column");
     assert!(stdout.contains("user"), "Should contain 'user' column");
 }
@@ -145,7 +151,9 @@ fn golden_column_selection() {
     // Non-selected column should NOT be present as header
     // (it might appear in the border/formatting but not as a column header)
     let lines: Vec<&str> = stdout.lines().collect();
-    let header_line = lines.iter().find(|l| l.contains("name") && l.contains("age"));
+    let header_line = lines
+        .iter()
+        .find(|l| l.contains("name") && l.contains("age"));
     if let Some(header) = header_line {
         // Check that 'id' is not between column separators
         let parts: Vec<&str> = header.split(['┆', '│', '|']).collect();
@@ -198,7 +206,10 @@ fn golden_markdown_style() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Markdown style should use | for columns
-    assert!(stdout.contains("|"), "Markdown style should use | separators");
+    assert!(
+        stdout.contains("|"),
+        "Markdown style should use | separators"
+    );
 
     // Should have the header separator line with dashes
     assert!(

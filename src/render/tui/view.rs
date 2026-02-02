@@ -30,7 +30,13 @@ fn render_table(frame: &mut Frame, app: &App, area: Rect) {
     let header_cells: Vec<Cell> = app
         .columns()
         .iter()
-        .map(|h| Cell::from(h.clone()).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
+        .map(|h| {
+            Cell::from(h.clone()).style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+        })
         .collect();
 
     let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -50,10 +56,7 @@ fn render_table(frame: &mut Frame, app: &App, area: Rect) {
         .map(|visible_idx| {
             let row_data = app.get_visible_row(visible_idx);
             let cells: Vec<Cell> = match row_data {
-                Some(values) => values
-                    .iter()
-                    .map(|v| Cell::from(format_value(v)))
-                    .collect(),
+                Some(values) => values.iter().map(|v| Cell::from(format_value(v))).collect(),
                 None => vec![Cell::from(""); col_count],
             };
 
@@ -78,11 +81,7 @@ fn render_table(frame: &mut Frame, app: &App, area: Rect) {
 
     let table = Table::new(rows, constraints)
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title),
-        )
+        .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
 
     // We manually handle selection via styling, so use StatefulWidget with empty state
