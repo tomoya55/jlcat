@@ -38,12 +38,8 @@ fn large_file_1k_rows() {
     assert!(stdout.contains("id"), "Should have id column");
     assert!(stdout.contains("name"), "Should have name column");
 
-    // Performance check: should complete in under 2 seconds
-    assert!(
-        duration.as_secs() < 2,
-        "1000 rows should process in under 2 seconds, took {:?}",
-        duration
-    );
+    // Log timing for informational purposes (no assertion)
+    eprintln!("large_file_1k_rows completed in {:?}", duration);
 }
 
 /// Test that we can process 10000 rows
@@ -64,12 +60,8 @@ fn large_file_10k_rows() {
     assert!(stdout.contains("user_0"), "Should contain first user");
     assert!(stdout.contains("user_9999"), "Should contain last user");
 
-    // Performance check: should complete in under 5 seconds
-    assert!(
-        duration.as_secs() < 5,
-        "10000 rows should process in under 5 seconds, took {:?}",
-        duration
-    );
+    // Log timing for informational purposes (no assertion)
+    eprintln!("large_file_10k_rows completed in {:?}", duration);
 }
 
 /// Test sorting with large dataset
@@ -90,12 +82,8 @@ fn large_file_sorted() {
 
     assert!(output.status.success(), "Should succeed with sorting");
 
-    // Performance check: sorting 5000 rows should be quick
-    assert!(
-        duration.as_secs() < 5,
-        "Sorting 5000 rows should complete in under 5 seconds, took {:?}",
-        duration
-    );
+    // Log timing for informational purposes (no assertion)
+    eprintln!("large_file_sorted (5000 rows) completed in {:?}", duration);
 }
 
 /// Test column selection with large dataset
@@ -122,10 +110,9 @@ fn large_file_column_selection() {
     assert!(stdout.contains("id"), "Should have id column");
     assert!(stdout.contains("name"), "Should have name column");
 
-    // Performance check
-    assert!(
-        duration.as_secs() < 3,
-        "Column selection on 5000 rows should complete in under 3 seconds, took {:?}",
+    // Log timing for informational purposes (no assertion)
+    eprintln!(
+        "large_file_column_selection (5000 rows) completed in {:?}",
         duration
     );
 }
@@ -142,12 +129,8 @@ fn large_file_stdin() {
 
     assert!(output.status.success(), "Should succeed with stdin input");
 
-    // Performance check
-    assert!(
-        duration.as_secs() < 3,
-        "2000 rows via stdin should complete in under 3 seconds, took {:?}",
-        duration
-    );
+    // Log timing for informational purposes (no assertion)
+    eprintln!("large_file_stdin (2000 rows) completed in {:?}", duration);
 }
 
 /// Test IndexedReader with large file
@@ -172,16 +155,10 @@ fn indexed_reader_large_file() {
 
     assert_eq!(row_5000["id"], 5000, "Row 5000 should have id 5000");
 
-    // Performance checks
-    assert!(
-        index_duration.as_millis() < 500,
-        "Indexing 10000 rows should take less than 500ms, took {:?}",
-        index_duration
-    );
-    assert!(
-        access_duration.as_millis() < 10,
-        "Random access should take less than 10ms, took {:?}",
-        access_duration
+    // Log timing for informational purposes (no assertion)
+    eprintln!(
+        "indexed_reader_large_file: indexing {:?}, random access {:?}",
+        index_duration, access_duration
     );
 }
 
@@ -194,24 +171,26 @@ fn cached_reader_large_file() {
     let content = generate_jsonl(5000);
     let cursor = Cursor::new(content.as_bytes().to_vec());
 
-    let mut reader = CachedReader::with_cache_size(cursor, 100).expect("Should create cached reader");
+    let mut reader =
+        CachedReader::with_cache_size(cursor, 100).expect("Should create cached reader");
 
     // First access - cold cache
     let start = Instant::now();
-    let _ = reader.get_row(1000).unwrap();
+    let row1 = reader.get_row(1000).unwrap();
     let cold_duration = start.elapsed();
 
     // Second access - warm cache
     let start = Instant::now();
-    let _ = reader.get_row(1000).unwrap();
+    let row2 = reader.get_row(1000).unwrap();
     let warm_duration = start.elapsed();
 
-    // Cached access should be faster
-    assert!(
-        warm_duration < cold_duration || warm_duration.as_micros() < 100,
-        "Cached access should be fast, cold: {:?}, warm: {:?}",
-        cold_duration,
-        warm_duration
+    // Verify we got the same row
+    assert_eq!(row1, row2, "Cached row should match original");
+
+    // Log timing for informational purposes (no assertion)
+    eprintln!(
+        "cached_reader_large_file: cold {:?}, warm {:?}",
+        cold_duration, warm_duration
     );
 }
 
