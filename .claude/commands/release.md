@@ -1,6 +1,6 @@
 ---
 name: release
-description: Prepare a new release - bump version, update CHANGELOG from git log, show tag commands
+description: Prepare a new release - bump version, update CHANGELOG, commit, create PR, show tag commands
 ---
 
 # Release Preparation
@@ -14,11 +14,17 @@ description: Prepare a new release - bump version, update CHANGELOG from git log
 5. **Update files:**
    - `CHANGELOG.md` - Add new version section with categorized changes
    - `Cargo.toml` - Bump version
-6. **Show release commands** (do NOT execute):
+6. **Commit and push:**
+   - `git add CHANGELOG.md Cargo.toml && git commit -m "chore: release vX.Y.Z"`
+   - `git push -u origin <branch>`
+7. **Create PR** using `gh pr create`
+8. **Show release commands** with alert:
    ```
-   git add -A && git commit -m "chore: release vX.Y.Z"
+   ⚠️  Run these commands AFTER the PR is merged:
+
+   git checkout main && git pull
    git tag vX.Y.Z
-   git push origin main --tags
+   git push origin --tags
    ```
 
 ## Changelog Generation
@@ -53,7 +59,7 @@ Format each entry as: `- {commit message without prefix}`
 
 ## Important
 
-- Do NOT auto-commit or auto-tag
-- Do NOT push anything
-- Show commands for user to execute manually
+- Do NOT auto-tag (user runs tag commands after PR merge)
 - Always ask for version confirmation before making changes
+- Commit, push, and create PR automatically
+- Show tag commands with clear alert about running after merge
