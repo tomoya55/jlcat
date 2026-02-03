@@ -1,3 +1,4 @@
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 /// Configuration for flat mode
@@ -135,9 +136,81 @@ impl Default for FlatSchema {
     }
 }
 
+/// Format an array value for display with element limit
+pub fn format_array(value: &Value, limit: usize) -> String {
+    let arr = match value {
+        Value::Array(a) => a,
+        _ => return String::new(),
+    };
+
+    if arr.is_empty() {
+        return String::new();
+    }
+
+    let formatted: Vec<String> = arr
+        .iter()
+        .take(limit)
+        .map(format_array_element)
+        .collect();
+
+    if arr.len() > limit {
+        format!("{}, ...", formatted.join(", "))
+    } else {
+        formatted.join(", ")
+    }
+}
+
+fn format_array_element(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => s.clone(),
+        Value::Array(_) => "[...]".to_string(),
+        Value::Object(_) => "{...}".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_format_array_basic() {
+        let arr = json!(["a", "b"]);
+        assert_eq!(format_array(&arr, 3), "a, b");
+    }
+
+    #[test]
+    fn test_format_array_with_limit() {
+        let arr = json!(["a", "b", "c", "d"]);
+        assert_eq!(format_array(&arr, 3), "a, b, c, ...");
+    }
+
+    #[test]
+    fn test_format_array_exact_limit() {
+        let arr = json!(["a", "b", "c"]);
+        assert_eq!(format_array(&arr, 3), "a, b, c");
+    }
+
+    #[test]
+    fn test_format_array_empty() {
+        let arr = json!([]);
+        assert_eq!(format_array(&arr, 3), "");
+    }
+
+    #[test]
+    fn test_format_array_nested_objects() {
+        let arr = json!([1, {"x": 2}, [3, 4]]);
+        assert_eq!(format_array(&arr, 3), "1, {...}, [...]");
+    }
+
+    #[test]
+    fn test_format_array_mixed_types() {
+        let arr = json!([1, "two", true, null]);
+        assert_eq!(format_array(&arr, 4), "1, two, true, null");
+    }
 
     #[test]
     fn test_flat_config_default() {
