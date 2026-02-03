@@ -136,6 +136,54 @@ impl Default for FlatSchema {
     }
 }
 
+/// Flatten a JSON object into dot-notation key-value pairs
+pub fn flatten_object(value: &Value, config: &FlatConfig) -> HashMap<String, Value> {
+    let mut result = HashMap::new();
+
+    if let Value::Object(obj) = value {
+        flatten_object_recursive(obj, "", 0, config, &mut result);
+    }
+
+    result
+}
+
+fn flatten_object_recursive(
+    obj: &serde_json::Map<String, Value>,
+    prefix: &str,
+    depth: usize,
+    config: &FlatConfig,
+    result: &mut HashMap<String, Value>,
+) {
+    for (key, value) in obj {
+        let full_key = if prefix.is_empty() {
+            key.clone()
+        } else {
+            format!("{}.{}", prefix, key)
+        };
+
+        match value {
+            Value::Object(nested_obj) => {
+                // Check depth limit
+                if config.depth.is_none_or(|max| depth < max) {
+                    // Expand the object
+                    flatten_object_recursive(nested_obj, &full_key, depth + 1, config, result);
+                } else {
+                    // Depth limit reached, use placeholder
+                    result.insert(full_key, Value::String("{...}".to_string()));
+                }
+            }
+            Value::Array(_) => {
+                // Format array with limit
+                let formatted = format_array(value, config.array_limit);
+                result.insert(full_key, Value::String(formatted));
+            }
+            _ => {
+                result.insert(full_key, value.clone());
+            }
+        }
+    }
+}
+
 /// Format an array value for display with element limit
 pub fn format_array(value: &Value, limit: usize) -> String {
     let arr = match value {
@@ -266,5 +314,46 @@ mod tests {
 
         assert!(schema.columns().contains(&"user".to_string()));
         assert!(schema.is_dynamic_column("user"));
+    }
+
+    #[test]
+    fn test_flatten_object_simple() {
+        let obj = json!({"id": 1, "name": "Alice"});
+        let config = FlatConfig::default();
+        let flattened = flatten_object(&obj, &config);
+
+        assert_eq!(flattened.get("id"), Some(&json!(1)));
+        assert_eq!(flattened.get("name"), Some(&json!("Alice")));
+    }
+
+    #[test]
+    fn test_flatten_object_nested() {
+        let obj = json!({"id": 1, "user": {"name": "Alice", "age": 30}});
+        let config = FlatConfig::default();
+        let flattened = flatten_object(&obj, &config);
+
+        assert_eq!(flattened.get("id"), Some(&json!(1)));
+        assert_eq!(flattened.get("user.name"), Some(&json!("Alice")));
+        assert_eq!(flattened.get("user.age"), Some(&json!(30)));
+        assert!(!flattened.contains_key("user")); // parent not included
+    }
+
+    #[test]
+    fn test_flatten_object_depth_limit() {
+        let obj = json!({"a": {"b": {"c": 1}}});
+        let config = FlatConfig::new(Some(1), 3);
+        let flattened = flatten_object(&obj, &config);
+
+        // Only 1 level deep, so a.b is {c: 1} displayed as {...}
+        assert_eq!(flattened.get("a.b"), Some(&json!("{...}")));
+    }
+
+    #[test]
+    fn test_flatten_object_with_array() {
+        let obj = json!({"tags": ["a", "b", "c", "d"]});
+        let config = FlatConfig::default(); // limit 3
+        let flattened = flatten_object(&obj, &config);
+
+        assert_eq!(flattened.get("tags"), Some(&json!("a, b, c, ...")));
     }
 }
