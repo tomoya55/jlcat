@@ -6,7 +6,9 @@ mod render;
 
 use clap::Parser;
 use cli::Cli;
-use core::{ChildTable, ColumnSelector, FlatConfig, FlatTableData, NestedExtractor, Sorter, TableData};
+use core::{
+    ChildTable, ColumnSelector, FlatConfig, FlatTableData, NestedExtractor, Sorter, TableData,
+};
 use error::{JlcatError, Result};
 use input::{sniff_format, InputFormat};
 use render::CatRenderer;

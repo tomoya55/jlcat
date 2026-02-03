@@ -64,13 +64,9 @@ impl Cli {
 
     /// Get flat option: None if not provided, Some(None) if --flat, Some(Some(n)) if --flat=n
     pub fn flat(&self) -> Option<Option<usize>> {
-        self.flat_raw.as_ref().map(|s| {
-            if s.is_empty() {
-                None
-            } else {
-                s.parse().ok()
-            }
-        })
+        self.flat_raw
+            .as_ref()
+            .map(|s| if s.is_empty() { None } else { s.parse().ok() })
     }
 
     /// Check if flat mode is enabled

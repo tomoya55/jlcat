@@ -100,6 +100,7 @@ impl FlatSchema {
     }
 
     /// Check if a column was added dynamically
+    #[allow(dead_code)]
     pub fn is_dynamic_column(&self, path: &str) -> bool {
         self.dynamic_columns.contains(path)
     }
@@ -151,6 +152,7 @@ impl Default for FlatSchema {
 pub struct FlatTableData {
     schema: FlatSchema,
     rows: Vec<Vec<Value>>,
+    #[allow(dead_code)]
     config: FlatConfig,
 }
 
@@ -333,6 +335,7 @@ impl FlatTableData {
         self.rows.is_empty()
     }
 
+    #[allow(dead_code)]
     pub fn config(&self) -> &FlatConfig {
         &self.config
     }
@@ -397,11 +400,7 @@ pub fn format_array(value: &Value, limit: usize) -> String {
         return String::new();
     }
 
-    let formatted: Vec<String> = arr
-        .iter()
-        .take(limit)
-        .map(format_array_element)
-        .collect();
+    let formatted: Vec<String> = arr.iter().take(limit).map(format_array_element).collect();
 
     if arr.len() > limit {
         format!("{}, ...", formatted.join(", "))
