@@ -104,6 +104,16 @@ impl FlatSchema {
         self.dynamic_columns.contains(path)
     }
 
+    /// Check if a key has children (was expanded as an object)
+    pub fn has_children(&self, key: &str) -> bool {
+        self.children.contains_key(key)
+    }
+
+    /// Check if a column path exists in the schema
+    pub fn contains_column(&self, path: &str) -> bool {
+        self.all_columns.contains(path)
+    }
+
     /// Get columns in proper order:
     /// - First-level keys in appearance order
     /// - Children sorted alphabetically under their parent's position
@@ -133,6 +143,198 @@ impl FlatSchema {
 impl Default for FlatSchema {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Table data with flattened structure
+#[derive(Debug, Clone)]
+pub struct FlatTableData {
+    schema: FlatSchema,
+    rows: Vec<Vec<Value>>,
+    config: FlatConfig,
+}
+
+impl FlatTableData {
+    /// Build flat table data from JSON rows
+    pub fn from_rows(rows: &[Value], config: FlatConfig) -> Self {
+        let mut schema = FlatSchema::new();
+        let mut flat_rows: Vec<HashMap<String, Value>> = Vec::new();
+
+        // First pass: build schema from all rows in first chunk
+        // We process original JSON to preserve key order
+        for row in rows {
+            let flattened = flatten_object(row, &config);
+
+            // Add columns by traversing original JSON structure (preserves order)
+            Self::add_columns_from_json(&mut schema, row, "", 0, &config);
+
+            flat_rows.push(flattened);
+        }
+
+        schema.finalize_initial_schema();
+
+        // Second pass: handle conflicts and build final rows
+        let columns = schema.columns();
+        let mut result_rows: Vec<Vec<Value>> = Vec::new();
+
+        for (idx, row) in rows.iter().enumerate() {
+            let flattened = &flat_rows[idx];
+            let mut result_row: Vec<Value> = Vec::new();
+
+            for col in &columns {
+                if let Some(value) = flattened.get(col) {
+                    result_row.push(value.clone());
+                } else {
+                    // Check for structure conflict
+                    let original_value = Self::get_original_value(row, col);
+                    match original_value {
+                        Some(Value::Object(_)) => {
+                            // Object where we expected scalar - show {...}
+                            result_row.push(Value::String("{...}".to_string()));
+                        }
+                        Some(v) if !col.contains('.') => {
+                            // Scalar value for parent column
+                            result_row.push(v.clone());
+                        }
+                        _ => {
+                            result_row.push(Value::Null);
+                        }
+                    }
+                }
+            }
+
+            result_rows.push(result_row);
+        }
+
+        // Handle dynamic column additions (object->scalar conflicts)
+        let mut final_schema = schema.clone();
+        for row in rows.iter() {
+            if let Value::Object(obj) = row {
+                for (key, value) in obj {
+                    // If this key was expanded but current row has scalar
+                    if final_schema.has_children(key) && !matches!(value, Value::Object(_)) {
+                        // Need to add parent column dynamically
+                        if !final_schema.contains_column(key) {
+                            final_schema.add_column(key.clone(), false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Rebuild rows if schema changed
+        if final_schema.columns().len() != columns.len() {
+            let new_columns = final_schema.columns();
+            let mut new_rows: Vec<Vec<Value>> = Vec::new();
+
+            for (idx, row) in rows.iter().enumerate() {
+                let flattened = &flat_rows[idx];
+                let mut result_row: Vec<Value> = Vec::new();
+
+                for col in &new_columns {
+                    if let Some(value) = flattened.get(col) {
+                        result_row.push(value.clone());
+                    } else {
+                        let original_value = Self::get_original_value(row, col);
+                        match original_value {
+                            Some(Value::Object(_)) => {
+                                result_row.push(Value::String("{...}".to_string()));
+                            }
+                            Some(v) if !col.contains('.') => {
+                                result_row.push(v.clone());
+                            }
+                            _ => {
+                                result_row.push(Value::Null);
+                            }
+                        }
+                    }
+                }
+
+                new_rows.push(result_row);
+            }
+
+            return Self {
+                schema: final_schema,
+                rows: new_rows,
+                config,
+            };
+        }
+
+        Self {
+            schema,
+            rows: result_rows,
+            config,
+        }
+    }
+
+    /// Recursively add columns from JSON structure while preserving key order
+    fn add_columns_from_json(
+        schema: &mut FlatSchema,
+        value: &Value,
+        prefix: &str,
+        depth: usize,
+        config: &FlatConfig,
+    ) {
+        if let Value::Object(obj) = value {
+            for (key, val) in obj {
+                let full_key = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{}.{}", prefix, key)
+                };
+
+                match val {
+                    Value::Object(_) => {
+                        // Check depth limit
+                        if config.depth.is_none_or(|max| depth < max) {
+                            // Expand the object - recurse but don't add parent as column
+                            Self::add_columns_from_json(schema, val, &full_key, depth + 1, config);
+                        } else {
+                            // Depth limit reached - add as leaf column
+                            let is_child = full_key.contains('.');
+                            schema.add_column(full_key, is_child);
+                        }
+                    }
+                    _ => {
+                        // Scalar or array - add as column
+                        let is_child = full_key.contains('.');
+                        schema.add_column(full_key, is_child);
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_original_value<'a>(row: &'a Value, path: &str) -> Option<&'a Value> {
+        let parts: Vec<&str> = path.split('.').collect();
+        let mut current = row;
+
+        for part in parts {
+            match current {
+                Value::Object(obj) => {
+                    current = obj.get(part)?;
+                }
+                _ => return None,
+            }
+        }
+
+        Some(current)
+    }
+
+    pub fn columns(&self) -> Vec<String> {
+        self.schema.columns()
+    }
+
+    pub fn rows(&self) -> &[Vec<Value>] {
+        &self.rows
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    pub fn config(&self) -> &FlatConfig {
+        &self.config
     }
 }
 
@@ -355,5 +557,57 @@ mod tests {
         let flattened = flatten_object(&obj, &config);
 
         assert_eq!(flattened.get("tags"), Some(&json!("a, b, c, ...")));
+    }
+
+    #[test]
+    fn test_flat_table_data_basic() {
+        let rows = vec![
+            json!({"id": 1, "user": {"name": "Alice", "age": 30}}),
+            json!({"id": 2, "user": {"name": "Bob", "age": 25}}),
+        ];
+        let config = FlatConfig::default();
+
+        let table = FlatTableData::from_rows(&rows, config);
+
+        // Columns: id (first-level), user.age, user.name (children sorted)
+        assert_eq!(table.columns(), &["id", "user.age", "user.name"]);
+        assert_eq!(table.rows().len(), 2);
+    }
+
+    #[test]
+    fn test_flat_table_data_structure_conflict() {
+        // First row: user is object, second row: user is string
+        let rows = vec![
+            json!({"id": 1, "user": {"name": "Alice"}}),
+            json!({"id": 2, "user": "Bob"}),
+        ];
+        let config = FlatConfig::default();
+
+        let table = FlatTableData::from_rows(&rows, config);
+
+        // Should have both user and user.name columns
+        let cols = table.columns();
+        assert!(cols.contains(&"user".to_string()));
+        assert!(cols.contains(&"user.name".to_string()));
+
+        // Row 1: user.name = "Alice", user = null
+        // Row 2: user.name = null, user = "Bob"
+    }
+
+    #[test]
+    fn test_flat_table_data_scalar_to_object() {
+        // First row: user is string, second row: user is object
+        let rows = vec![
+            json!({"id": 1, "user": "Alice"}),
+            json!({"id": 2, "user": {"name": "Bob"}}),
+        ];
+        let config = FlatConfig::default();
+
+        let table = FlatTableData::from_rows(&rows, config);
+
+        // user column should exist (from first row)
+        // Second row's object should be displayed as {...}
+        let cols = table.columns();
+        assert!(cols.contains(&"user".to_string()));
     }
 }

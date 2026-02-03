@@ -17,7 +17,7 @@ mod value;
 #[allow(dead_code)]
 pub use cache::RowCache;
 #[allow(unused_imports)]
-pub use flat::{FlatConfig, FlatSchema};
+pub use flat::{FlatConfig, FlatSchema, FlatTableData};
 pub use extractor::{ChildTable, NestedExtractor};
 pub use filter::{FilterExpr, FullTextSearch};
 #[allow(unused_imports)]
