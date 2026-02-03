@@ -1,5 +1,5 @@
 use crate::cli::TableStyle;
-use crate::core::TableData;
+use crate::core::{FlatTableData, TableData};
 use comfy_table::{presets, ContentArrangement, Table};
 use serde_json::Value;
 
@@ -33,6 +33,32 @@ impl CatRenderer {
         table.set_header(table_data.columns());
 
         // Add rows
+        for row in table_data.rows() {
+            let cells: Vec<String> = row.iter().map(|v| self.format_value(v)).collect();
+            table.add_row(cells);
+        }
+
+        table.to_string()
+    }
+
+    pub fn render_flat(&self, table_data: &FlatTableData) -> String {
+        if table_data.is_empty() {
+            return String::new();
+        }
+
+        let mut table = Table::new();
+
+        match self.style {
+            TableStyle::Ascii => table.load_preset(presets::ASCII_FULL),
+            TableStyle::Rounded => table.load_preset(presets::UTF8_FULL),
+            TableStyle::Markdown => table.load_preset(presets::ASCII_MARKDOWN),
+            TableStyle::Plain => table.load_preset(presets::NOTHING),
+        };
+
+        table.set_content_arrangement(ContentArrangement::Dynamic);
+
+        table.set_header(table_data.columns());
+
         for row in table_data.rows() {
             let cells: Vec<String> = row.iter().map(|v| self.format_value(v)).collect();
             table.add_row(cells);

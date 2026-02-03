@@ -6,7 +6,7 @@ mod render;
 
 use clap::Parser;
 use cli::Cli;
-use core::{ChildTable, ColumnSelector, NestedExtractor, Sorter, TableData};
+use core::{ChildTable, ColumnSelector, FlatConfig, FlatTableData, NestedExtractor, Sorter, TableData};
 use error::{JlcatError, Result};
 use input::{sniff_format, InputFormat};
 use render::CatRenderer;
@@ -46,13 +46,18 @@ fn main() -> Result<()> {
 
     // Render
     if cli.interactive {
-        // TUI mode
+        // TUI mode (flat mode TUI will be added in Task 8)
         let table_data = TableData::from_rows(rows, selector);
         render::tui::run(table_data)?;
     } else {
         let renderer = CatRenderer::new(cli.style.clone());
 
-        if cli.recursive {
+        if cli.is_flat() {
+            // Flat mode - expand nested objects
+            let config = FlatConfig::new(cli.flat_depth(), cli.array_limit);
+            let flat_table = FlatTableData::from_rows(&rows, config);
+            println!("{}", renderer.render_flat(&flat_table));
+        } else if cli.recursive {
             // Extract nested structures
             let children = NestedExtractor::extract(&rows);
 
