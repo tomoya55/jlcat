@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-04
+
+### Added
+
+- **Flat mode** (`--flat`) - Alternative column generation that expands nested objects and arrays into separate columns with indexed suffixes (e.g., `items.0.name`, `items.1.name`)
+- **Array limit** (`--array-limit N`) - Control maximum array elements to expand in flat mode (default: 10)
+- Flat mode support in both CLI and interactive TUI modes
+
 ## [0.1.0] - 2026-02-02
 
 ### Added
@@ -21,4 +29,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Disable flattening** (`--no-flatten`) - Keep nested objects as JSON strings
 - Cross-platform support: Linux, macOS (Intel & Apple Silicon), Windows
 
-[0.1.0]: https://github.com/tomoya55/jlcat/releases/tag/0.1.0
+[0.1.1]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.1
+[0.1.0]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.0

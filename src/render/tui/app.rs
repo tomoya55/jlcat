@@ -1,4 +1,4 @@
-use crate::core::{FilterExpr, FullTextSearch, TableData};
+use crate::core::{FilterExpr, FlatTableData, FullTextSearch, TableData};
 use serde_json::Value;
 
 /// Application state for TUI mode
@@ -35,6 +35,25 @@ impl App {
 
         Self {
             table_data,
+            scroll_offset: 0,
+            selected_row: 0,
+            mode: InputMode::Normal,
+            search_query: String::new(),
+            filter_expr: None,
+            filtered_indices,
+            input_buffer: String::new(),
+        }
+    }
+
+    /// Create App from flat table data (for flat mode TUI)
+    pub fn from_flat(flat_data: FlatTableData) -> Self {
+        let columns = flat_data.columns();
+        let rows: Vec<Vec<Value>> = flat_data.rows().to_vec();
+        let row_count = rows.len();
+        let filtered_indices: Vec<usize> = (0..row_count).collect();
+
+        Self {
+            table_data: TableData::from_flat_columns_rows(columns, rows),
             scroll_offset: 0,
             selected_row: 0,
             mode: InputMode::Normal,

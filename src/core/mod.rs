@@ -2,6 +2,7 @@
 mod cache;
 mod extractor;
 mod filter;
+mod flat;
 #[allow(dead_code)]
 mod path;
 #[allow(dead_code)]
@@ -16,6 +17,8 @@ mod value;
 pub use cache::RowCache;
 pub use extractor::{ChildTable, NestedExtractor};
 pub use filter::{FilterExpr, FullTextSearch};
+#[allow(unused_imports)]
+pub use flat::{FlatConfig, FlatSchema, FlatTableData};
 #[allow(unused_imports)]
 pub use schema::SchemaInferrer;
 pub use selector::ColumnSelector;

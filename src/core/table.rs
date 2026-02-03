@@ -12,6 +12,15 @@ pub struct TableData {
 }
 
 impl TableData {
+    /// Create TableData directly from columns and rows (for flat mode)
+    pub fn from_flat_columns_rows(columns: Vec<String>, rows: Vec<Vec<Value>>) -> Self {
+        Self {
+            columns,
+            rows,
+            schema: Schema::default(),
+        }
+    }
+
     pub fn from_rows(rows: Vec<Value>, selector: Option<ColumnSelector>) -> Self {
         let schema = SchemaInferrer::infer(&rows);
 

@@ -4,7 +4,7 @@ mod view;
 
 pub use app::App;
 
-use crate::core::TableData;
+use crate::core::{FlatTableData, TableData};
 use crate::error::Result;
 use crossterm::{
     event::{self, Event, KeyEventKind},
@@ -47,6 +47,20 @@ pub fn run(table_data: TableData) -> Result<()> {
     let mut terminal = init_terminal().map_err(crate::error::JlcatError::Io)?;
 
     let mut app = App::new(table_data);
+    let result = run_event_loop(&mut terminal, &mut app);
+
+    restore_terminal().map_err(crate::error::JlcatError::Io)?;
+
+    result
+}
+
+/// Run the TUI application with flat mode data
+pub fn run_flat(flat_data: FlatTableData) -> Result<()> {
+    install_panic_hook();
+
+    let mut terminal = init_terminal().map_err(crate::error::JlcatError::Io)?;
+
+    let mut app = App::from_flat(flat_data);
     let result = run_event_loop(&mut terminal, &mut app);
 
     restore_terminal().map_err(crate::error::JlcatError::Io)?;

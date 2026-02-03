@@ -238,3 +238,130 @@ invalid json line
         .stdout(predicate::str::contains("Alice"))
         .stdout(predicate::str::contains("Bob"));
 }
+
+mod flat_mode_tests {
+    use assert_cmd::Command;
+    use predicates::prelude::*;
+
+    #[test]
+    fn test_flat_nested_object() {
+        let input =
+            r#"{"id": 1, "user": {"name": "Alice", "profile": {"age": 30, "city": "Tokyo"}}}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("user.name"))
+            .stdout(predicate::str::contains("user.profile.age"))
+            .stdout(predicate::str::contains("user.profile.city"))
+            .stdout(predicate::str::contains("Alice"))
+            .stdout(predicate::str::contains("30"))
+            .stdout(predicate::str::contains("Tokyo"));
+    }
+
+    #[test]
+    fn test_flat_array_elements() {
+        let input = r#"{"tags": ["rust", "json", "cli", "tui", "awesome"]}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("rust, json, cli, ..."));
+    }
+
+    #[test]
+    fn test_flat_array_limit_custom() {
+        let input = r#"{"tags": ["a", "b", "c", "d", "e"]}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .arg("--array-limit=5")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("a, b, c, d, e"));
+    }
+
+    #[test]
+    fn test_flat_depth_limit() {
+        let input = r#"{"a": {"b": {"c": {"d": 1}}}}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat=2")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("a.b.c"))
+            .stdout(predicate::str::contains("{...}"));
+    }
+
+    #[test]
+    fn test_flat_structure_conflict_object_to_scalar() {
+        let input = r#"{"id": 1, "data": {"x": 1}}
+{"id": 2, "data": "simple"}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("data.x"))
+            .stdout(predicate::str::contains("data"))
+            .stdout(predicate::str::contains("simple"));
+    }
+
+    #[test]
+    fn test_flat_with_markdown_style() {
+        let input = r#"{"user": {"name": "Alice"}}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .arg("--style=markdown")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("| user.name |"))
+            .stdout(predicate::str::contains("Alice"));
+    }
+
+    #[test]
+    fn test_flat_multiple_rows() {
+        let input = r#"{"id": 1, "info": {"status": "active"}}
+{"id": 2, "info": {"status": "inactive"}}
+{"id": 3, "info": {"status": "pending"}}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("info.status"))
+            .stdout(predicate::str::contains("active"))
+            .stdout(predicate::str::contains("inactive"))
+            .stdout(predicate::str::contains("pending"));
+    }
+
+    #[test]
+    fn test_flat_empty_array() {
+        let input = r#"{"tags": []}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat").write_stdin(input).assert().success();
+    }
+
+    #[test]
+    fn test_flat_null_values() {
+        let input = r#"{"user": {"name": null, "age": 30}}"#;
+
+        let mut cmd = Command::cargo_bin("jlcat").unwrap();
+        cmd.arg("--flat")
+            .write_stdin(input)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("null"));
+    }
+}

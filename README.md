@@ -52,6 +52,8 @@ jlcat [OPTIONS] [FILE]
 | `-c, --columns <COLS>` | Columns to display (comma-separated, supports wildcards) |
 | `-s, --sort <KEYS>` | Sort by columns (prefix with `-` for descending) |
 | `-r, --recursive` | Expand nested structures as child tables |
+| `--flat[=DEPTH]` | Flatten nested objects with optional depth limit |
+| `--array-limit=N` | Max array elements to show in flat mode (default: 3) |
 | `--no-flatten` | Disable auto-flattening of nested objects |
 | `--style <STYLE>` | Table style: `ascii`, `rounded`, `markdown`, `plain` |
 | `--lenient` | Skip invalid JSON lines instead of erroring |
@@ -87,6 +89,29 @@ Output:
 │ 1  │ Alice     │ 30               │ ["dev","rust"] │
 │ 2  │ Bob       │ 25               │ ["ops"]        │
 ╰────┴───────────┴──────────────────┴────────────────╯
+```
+
+### Flat mode with depth limit
+
+The `--flat` option enables explicit flat mode with dot-notation columns. Optionally specify a depth limit:
+
+```bash
+# Enable flat mode
+echo '{"user": {"name": "Alice", "age": 30}}' | jlcat --flat
+
+# Limit expansion depth
+jlcat --flat=2 data.jsonl
+
+# Customize array display limit (default: 3)
+jlcat --flat --array-limit=5 data.jsonl
+```
+
+Arrays are displayed as comma-separated values with ellipsis for truncation:
+
+```
+| tags         |
+|--------------|
+| a, b, c, ... |
 ```
 
 ### Disable flattening
