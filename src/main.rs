@@ -46,9 +46,15 @@ fn main() -> Result<()> {
 
     // Render
     if cli.interactive {
-        // TUI mode (flat mode TUI will be added in Task 8)
-        let table_data = TableData::from_rows(rows, selector);
-        render::tui::run(table_data)?;
+        // TUI mode
+        if cli.is_flat() {
+            let config = FlatConfig::new(cli.flat_depth(), cli.array_limit);
+            let flat_table = FlatTableData::from_rows(&rows, config);
+            render::tui::run_flat(flat_table)?;
+        } else {
+            let table_data = TableData::from_rows(rows, selector);
+            render::tui::run(table_data)?;
+        }
     } else {
         let renderer = CatRenderer::new(cli.style.clone());
 
