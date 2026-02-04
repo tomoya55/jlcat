@@ -1,4 +1,5 @@
 mod app;
+pub mod highlight;
 mod input;
 mod view;
 
