@@ -52,10 +52,10 @@ fn main() -> Result<()> {
         if cli.is_flat() {
             let config = FlatConfig::new(cli.flat_depth(), cli.array_limit);
             let flat_table = FlatTableData::from_rows(&rows, config);
-            render::tui::run_flat(flat_table)?;
+            render::tui::run_flat(flat_table, rows)?;
         } else {
-            let table_data = TableData::from_rows(rows, selector);
-            render::tui::run(table_data)?;
+            let table_data = TableData::from_rows(rows.clone(), selector);
+            render::tui::run(table_data, rows)?;
         }
     } else {
         let renderer = CatRenderer::new(cli.style.clone());
