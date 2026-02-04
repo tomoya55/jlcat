@@ -1,9 +1,10 @@
 use super::app::{App, InputMode};
+use super::highlight::highlight_json;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Frame,
 };
 use serde_json::Value;
@@ -24,6 +25,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     // Update scroll based on actual viewport height
     let table_height = chunks[0].height.saturating_sub(3) as usize; // subtract borders and header
     app.ensure_visible_with_height(table_height);
+
+    // Render detail modal on top if in Detail mode
+    if app.mode == InputMode::Detail {
+        render_detail_modal(frame, app);
+    }
 }
 
 fn render_table(frame: &mut Frame, app: &App, area: Rect) {
@@ -192,4 +198,87 @@ fn format_value_short(value: &Value) -> String {
     } else {
         s
     }
+}
+
+/// Calculate a centered rectangle with given percentage of the area
+fn centered_rect(percent: u16, area: Rect) -> Rect {
+    let popup_width = area.width * percent / 100;
+    let popup_height = area.height * percent / 100;
+    let x = area.x + (area.width - popup_width) / 2;
+    let y = area.y + (area.height - popup_height) / 2;
+
+    Rect::new(x, y, popup_width, popup_height)
+}
+
+/// Render the detail view modal
+fn render_detail_modal(frame: &mut Frame, app: &App) {
+    let area = frame.area();
+    let modal_area = centered_rect(80, area);
+
+    // Clear the area behind the modal
+    frame.render_widget(Clear, modal_area);
+
+    // Get the selected source JSON
+    let source = match app.get_selected_source() {
+        Some(v) => v,
+        None => return,
+    };
+
+    // Get highlighted lines
+    let lines = highlight_json(source);
+
+    // Get scroll state
+    let scroll_offset = app
+        .detail_state()
+        .map(|s| s.scroll_offset)
+        .unwrap_or(0);
+
+    // Calculate viewport height (modal height minus borders and header/footer)
+    let viewport_height = modal_area.height.saturating_sub(4) as usize;
+
+    // Build title with row info
+    let row_num = app.selected_row() + 1;
+    let total_rows = app.visible_row_count();
+    let title = format!(" Row {} of {} ", row_num, total_rows);
+
+    // Build the block
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(title);
+
+    // Build footer with key hints
+    let footer_text = " ↑↓/jk: scroll  g/G: top/bottom  Esc: close  q: quit ";
+
+    // Create inner area for content
+    let inner_area = block.inner(modal_area);
+
+    // Split inner area for content and footer
+    let inner_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),    // Content
+            Constraint::Length(1), // Footer
+        ])
+        .split(inner_area);
+
+    // Render the block
+    frame.render_widget(block, modal_area);
+
+    // Render JSON content with scroll
+    let visible_lines: Vec<Line> = lines
+        .into_iter()
+        .skip(scroll_offset)
+        .take(viewport_height)
+        .collect();
+
+    let content = Paragraph::new(visible_lines);
+    frame.render_widget(content, inner_chunks[0]);
+
+    // Render footer
+    let footer = Paragraph::new(Line::from(Span::styled(
+        footer_text,
+        Style::default().fg(Color::DarkGray),
+    )));
+    frame.render_widget(footer, inner_chunks[1]);
 }
