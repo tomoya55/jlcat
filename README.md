@@ -169,8 +169,17 @@ jlcat -i data.jsonl
 **TUI keybindings:**
 - `j/k` or `↑/↓` - Navigate rows
 - `h/l` or `←/→` - Scroll columns
+- `Enter` - Open detail view (shows full JSON)
 - `/` - Search
 - `f` - Filter
+- `c` - Clear filters
+- `q` - Quit
+
+**Detail view keybindings:**
+- `j/k` or `↑/↓` - Scroll
+- `g` - Go to top
+- `G` - Go to bottom
+- `Esc` - Close detail view
 - `q` - Quit
 
 ## Input formats
