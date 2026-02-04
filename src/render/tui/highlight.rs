@@ -149,7 +149,7 @@ mod tests {
 
     #[test]
     fn test_highlight_with_numbers() {
-        let value = json!({"age": 30, "score": 3.14});
+        let value = json!({"age": 30, "score": 9.99});
         let lines = highlight_json(&value);
         assert!(!lines.is_empty());
     }
