@@ -7,13 +7,13 @@ pub use app::App;
 
 use crate::core::{FlatTableData, TableData};
 use crate::error::Result;
-use serde_json::Value;
 use crossterm::{
     event::{self, Event, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::prelude::*;
+use serde_json::Value;
 use std::io::{self, stdout, Stdout};
 use std::panic;
 

@@ -236,10 +236,7 @@ fn render_detail_modal(frame: &mut Frame, app: &mut App) {
     }
 
     // Get scroll state
-    let scroll_offset = app
-        .detail_state()
-        .map(|s| s.scroll_offset)
-        .unwrap_or(0);
+    let scroll_offset = app.detail_state().map(|s| s.scroll_offset).unwrap_or(0);
 
     // Build title with row info
     let row_num = app.selected_row() + 1;

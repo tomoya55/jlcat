@@ -92,7 +92,13 @@ fn highlight_line(line: &str) -> Line<'static> {
 
                 let mut token = String::from(c);
                 while let Some(&next) = chars.peek() {
-                    if next.is_ascii_alphanumeric() || next == '.' || next == '-' || next == '+' || next == 'e' || next == 'E' {
+                    if next.is_ascii_alphanumeric()
+                        || next == '.'
+                        || next == '-'
+                        || next == '+'
+                        || next == 'e'
+                        || next == 'E'
+                    {
                         token.push(chars.next().unwrap());
                     } else {
                         break;
