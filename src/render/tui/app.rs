@@ -5,6 +5,8 @@ use serde_json::Value;
 pub struct App {
     /// The table data to display
     table_data: TableData,
+    /// Original JSON records (before flattening)
+    source_records: Vec<Value>,
     /// Current scroll offset (first visible row)
     scroll_offset: usize,
     /// Currently selected row index (in filtered view)
@@ -19,6 +21,8 @@ pub struct App {
     filtered_indices: Vec<usize>,
     /// Input buffer for search/filter
     pub input_buffer: String,
+    /// State for detail view modal (when in Detail mode)
+    detail_state: Option<DetailViewState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,15 +30,59 @@ pub enum InputMode {
     Normal,
     Search,
     Filter,
+    Detail,
+}
+
+/// State for the detail view modal
+#[derive(Debug, Clone)]
+pub struct DetailViewState {
+    /// Scroll offset (line number)
+    pub scroll_offset: usize,
+    /// Total lines in the rendered JSON
+    pub total_lines: usize,
+    /// Viewport height (updated by view)
+    pub viewport_height: usize,
+}
+
+impl DetailViewState {
+    pub fn new(total_lines: usize) -> Self {
+        Self {
+            scroll_offset: 0,
+            total_lines,
+            viewport_height: 20, // Default, will be updated by view
+        }
+    }
+
+    pub fn set_viewport_height(&mut self, height: usize) {
+        self.viewport_height = height;
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        let max_offset = self.total_lines.saturating_sub(self.viewport_height);
+        self.scroll_offset = (self.scroll_offset + lines).min(max_offset);
+    }
+
+    pub fn go_to_top(&mut self) {
+        self.scroll_offset = 0;
+    }
+
+    pub fn go_to_bottom(&mut self) {
+        self.scroll_offset = self.total_lines.saturating_sub(self.viewport_height);
+    }
 }
 
 impl App {
-    pub fn new(table_data: TableData) -> Self {
+    pub fn new(table_data: TableData, source_records: Vec<Value>) -> Self {
         let row_count = table_data.rows().len();
         let filtered_indices: Vec<usize> = (0..row_count).collect();
 
         Self {
             table_data,
+            source_records,
             scroll_offset: 0,
             selected_row: 0,
             mode: InputMode::Normal,
@@ -42,11 +90,12 @@ impl App {
             filter_expr: None,
             filtered_indices,
             input_buffer: String::new(),
+            detail_state: None,
         }
     }
 
     /// Create App from flat table data (for flat mode TUI)
-    pub fn from_flat(flat_data: FlatTableData) -> Self {
+    pub fn from_flat(flat_data: FlatTableData, source_records: Vec<Value>) -> Self {
         let columns = flat_data.columns();
         let rows: Vec<Vec<Value>> = flat_data.rows().to_vec();
         let row_count = rows.len();
@@ -54,6 +103,7 @@ impl App {
 
         Self {
             table_data: TableData::from_flat_columns_rows(columns, rows),
+            source_records,
             scroll_offset: 0,
             selected_row: 0,
             mode: InputMode::Normal,
@@ -61,6 +111,7 @@ impl App {
             filter_expr: None,
             filtered_indices,
             input_buffer: String::new(),
+            detail_state: None,
         }
     }
 
@@ -131,6 +182,34 @@ impl App {
     /// Get the currently selected row's values
     pub fn get_selected_row(&self) -> Option<&[Value]> {
         self.get_visible_row(self.selected_row)
+    }
+
+    /// Get the original JSON for the currently selected row
+    pub fn get_selected_source(&self) -> Option<&Value> {
+        let actual_idx = *self.filtered_indices.get(self.selected_row)?;
+        self.source_records.get(actual_idx)
+    }
+
+    /// Get the detail view state (if in Detail mode)
+    pub fn detail_state(&self) -> Option<&DetailViewState> {
+        self.detail_state.as_ref()
+    }
+
+    /// Get mutable detail view state
+    pub fn detail_state_mut(&mut self) -> Option<&mut DetailViewState> {
+        self.detail_state.as_mut()
+    }
+
+    /// Enter detail view mode for the selected row
+    pub fn enter_detail_mode(&mut self, total_lines: usize) {
+        self.mode = InputMode::Detail;
+        self.detail_state = Some(DetailViewState::new(total_lines));
+    }
+
+    /// Exit detail view mode
+    pub fn exit_detail_mode(&mut self) {
+        self.mode = InputMode::Normal;
+        self.detail_state = None;
     }
 
     // Navigation
@@ -215,7 +294,7 @@ impl App {
                 }
                 self.apply_filters();
             }
-            InputMode::Normal => {}
+            InputMode::Normal | InputMode::Detail => {}
         }
         self.mode = InputMode::Normal;
         self.input_buffer.clear();
@@ -317,5 +396,38 @@ mod tests {
             App::quote_if_needed("say \"hello\""),
             "\"say \\\"hello\\\"\""
         );
+    }
+
+    #[test]
+    fn test_detail_view_state_scroll() {
+        let mut state = DetailViewState::new(100);
+        state.set_viewport_height(20);
+        assert_eq!(state.scroll_offset, 0);
+
+        state.scroll_down(10);
+        assert_eq!(state.scroll_offset, 10);
+
+        state.scroll_up(5);
+        assert_eq!(state.scroll_offset, 5);
+
+        state.go_to_top();
+        assert_eq!(state.scroll_offset, 0);
+
+        state.go_to_bottom();
+        assert_eq!(state.scroll_offset, 80); // 100 - 20
+    }
+
+    #[test]
+    fn test_detail_view_state_scroll_bounds() {
+        let mut state = DetailViewState::new(50);
+        state.set_viewport_height(20);
+
+        // Scroll down beyond max
+        state.scroll_down(100);
+        assert_eq!(state.scroll_offset, 30); // 50 - 20
+
+        // Scroll up beyond 0
+        state.scroll_up(100);
+        assert_eq!(state.scroll_offset, 0);
     }
 }
