@@ -1,6 +1,6 @@
 [package]
 name = "jlcat"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "JSON/JSONL table viewer with TUI support"
 license = "MIT"
