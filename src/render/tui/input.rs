@@ -121,7 +121,7 @@ fn handle_detail_mode(app: &mut App, key: KeyCode) -> Action {
         // Scroll down
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(state) = app.detail_state_mut() {
-                state.scroll_down(1, 20);
+                state.scroll_down(1);
             }
             Action::Continue
         }
@@ -137,7 +137,7 @@ fn handle_detail_mode(app: &mut App, key: KeyCode) -> Action {
         // Page down
         KeyCode::PageDown | KeyCode::Char(' ') => {
             if let Some(state) = app.detail_state_mut() {
-                state.scroll_down(10, 20);
+                state.scroll_down(10);
             }
             Action::Continue
         }
@@ -153,7 +153,7 @@ fn handle_detail_mode(app: &mut App, key: KeyCode) -> Action {
         // Go to bottom
         KeyCode::Char('G') => {
             if let Some(state) = app.detail_state_mut() {
-                state.go_to_bottom(20);
+                state.go_to_bottom();
             }
             Action::Continue
         }

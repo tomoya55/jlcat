@@ -40,6 +40,8 @@ pub struct DetailViewState {
     pub scroll_offset: usize,
     /// Total lines in the rendered JSON
     pub total_lines: usize,
+    /// Viewport height (updated by view)
+    pub viewport_height: usize,
 }
 
 impl DetailViewState {
@@ -47,15 +49,20 @@ impl DetailViewState {
         Self {
             scroll_offset: 0,
             total_lines,
+            viewport_height: 20, // Default, will be updated by view
         }
+    }
+
+    pub fn set_viewport_height(&mut self, height: usize) {
+        self.viewport_height = height;
     }
 
     pub fn scroll_up(&mut self, lines: usize) {
         self.scroll_offset = self.scroll_offset.saturating_sub(lines);
     }
 
-    pub fn scroll_down(&mut self, lines: usize, viewport_height: usize) {
-        let max_offset = self.total_lines.saturating_sub(viewport_height);
+    pub fn scroll_down(&mut self, lines: usize) {
+        let max_offset = self.total_lines.saturating_sub(self.viewport_height);
         self.scroll_offset = (self.scroll_offset + lines).min(max_offset);
     }
 
@@ -63,8 +70,8 @@ impl DetailViewState {
         self.scroll_offset = 0;
     }
 
-    pub fn go_to_bottom(&mut self, viewport_height: usize) {
-        self.scroll_offset = self.total_lines.saturating_sub(viewport_height);
+    pub fn go_to_bottom(&mut self) {
+        self.scroll_offset = self.total_lines.saturating_sub(self.viewport_height);
     }
 }
 
@@ -394,9 +401,10 @@ mod tests {
     #[test]
     fn test_detail_view_state_scroll() {
         let mut state = DetailViewState::new(100);
+        state.set_viewport_height(20);
         assert_eq!(state.scroll_offset, 0);
 
-        state.scroll_down(10, 20);
+        state.scroll_down(10);
         assert_eq!(state.scroll_offset, 10);
 
         state.scroll_up(5);
@@ -405,16 +413,17 @@ mod tests {
         state.go_to_top();
         assert_eq!(state.scroll_offset, 0);
 
-        state.go_to_bottom(20);
+        state.go_to_bottom();
         assert_eq!(state.scroll_offset, 80); // 100 - 20
     }
 
     #[test]
     fn test_detail_view_state_scroll_bounds() {
         let mut state = DetailViewState::new(50);
+        state.set_viewport_height(20);
 
         // Scroll down beyond max
-        state.scroll_down(100, 20);
+        state.scroll_down(100);
         assert_eq!(state.scroll_offset, 30); // 50 - 20
 
         // Scroll up beyond 0

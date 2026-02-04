@@ -211,7 +211,7 @@ fn centered_rect(percent: u16, area: Rect) -> Rect {
 }
 
 /// Render the detail view modal
-fn render_detail_modal(frame: &mut Frame, app: &App) {
+fn render_detail_modal(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let modal_area = centered_rect(80, area);
 
@@ -227,14 +227,19 @@ fn render_detail_modal(frame: &mut Frame, app: &App) {
     // Get highlighted lines
     let lines = highlight_json(source);
 
+    // Calculate viewport height (modal height minus borders and header/footer)
+    let viewport_height = modal_area.height.saturating_sub(4) as usize;
+
+    // Update viewport height in state
+    if let Some(state) = app.detail_state_mut() {
+        state.set_viewport_height(viewport_height);
+    }
+
     // Get scroll state
     let scroll_offset = app
         .detail_state()
         .map(|s| s.scroll_offset)
         .unwrap_or(0);
-
-    // Calculate viewport height (modal height minus borders and header/footer)
-    let viewport_height = modal_area.height.saturating_sub(4) as usize;
 
     // Build title with row info
     let row_num = app.selected_row() + 1;
