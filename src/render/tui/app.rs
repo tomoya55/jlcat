@@ -26,6 +26,7 @@ pub enum InputMode {
     Normal,
     Search,
     Filter,
+    Detail,
 }
 
 impl App {
@@ -215,7 +216,7 @@ impl App {
                 }
                 self.apply_filters();
             }
-            InputMode::Normal => {}
+            InputMode::Normal | InputMode::Detail => {}
         }
         self.mode = InputMode::Normal;
         self.input_buffer.clear();

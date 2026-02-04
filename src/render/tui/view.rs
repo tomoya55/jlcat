@@ -153,6 +153,18 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
                 )),
             ]
         }
+        InputMode::Detail => {
+            vec![
+                Line::from(Span::styled(
+                    "Detail View",
+                    Style::default().fg(Color::Yellow),
+                )),
+                Line::from(Span::styled(
+                    "Esc:close",
+                    Style::default().fg(Color::DarkGray),
+                )),
+            ]
+        }
     };
 
     let paragraph = Paragraph::new(content).block(Block::default().borders(Borders::ALL));

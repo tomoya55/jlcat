@@ -10,6 +10,7 @@ pub fn handle_key(app: &mut App, key: KeyCode) -> Action {
     match app.mode {
         InputMode::Normal => handle_normal_mode(app, key),
         InputMode::Search | InputMode::Filter => handle_input_mode(app, key),
+        InputMode::Detail => handle_normal_mode(app, key),
     }
 }
 
