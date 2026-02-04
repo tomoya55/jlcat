@@ -29,6 +29,41 @@ pub enum InputMode {
     Detail,
 }
 
+/// State for the detail view modal
+#[derive(Debug, Clone)]
+pub struct DetailViewState {
+    /// Scroll offset (line number)
+    pub scroll_offset: usize,
+    /// Total lines in the rendered JSON
+    pub total_lines: usize,
+}
+
+impl DetailViewState {
+    pub fn new(total_lines: usize) -> Self {
+        Self {
+            scroll_offset: 0,
+            total_lines,
+        }
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(lines);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize, viewport_height: usize) {
+        let max_offset = self.total_lines.saturating_sub(viewport_height);
+        self.scroll_offset = (self.scroll_offset + lines).min(max_offset);
+    }
+
+    pub fn go_to_top(&mut self) {
+        self.scroll_offset = 0;
+    }
+
+    pub fn go_to_bottom(&mut self, viewport_height: usize) {
+        self.scroll_offset = self.total_lines.saturating_sub(viewport_height);
+    }
+}
+
 impl App {
     pub fn new(table_data: TableData) -> Self {
         let row_count = table_data.rows().len();
@@ -318,5 +353,36 @@ mod tests {
             App::quote_if_needed("say \"hello\""),
             "\"say \\\"hello\\\"\""
         );
+    }
+
+    #[test]
+    fn test_detail_view_state_scroll() {
+        let mut state = DetailViewState::new(100);
+        assert_eq!(state.scroll_offset, 0);
+
+        state.scroll_down(10, 20);
+        assert_eq!(state.scroll_offset, 10);
+
+        state.scroll_up(5);
+        assert_eq!(state.scroll_offset, 5);
+
+        state.go_to_top();
+        assert_eq!(state.scroll_offset, 0);
+
+        state.go_to_bottom(20);
+        assert_eq!(state.scroll_offset, 80); // 100 - 20
+    }
+
+    #[test]
+    fn test_detail_view_state_scroll_bounds() {
+        let mut state = DetailViewState::new(50);
+
+        // Scroll down beyond max
+        state.scroll_down(100, 20);
+        assert_eq!(state.scroll_offset, 30); // 50 - 20
+
+        // Scroll up beyond 0
+        state.scroll_up(100);
+        assert_eq!(state.scroll_offset, 0);
     }
 }
