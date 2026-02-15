@@ -64,3 +64,56 @@ fn test_flat_mode_fallback_warning() {
         .assert()
         .success();
 }
+
+#[test]
+fn test_limit_option() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.arg("--limit")
+        .arg("2")
+        .arg("tests/fixtures/simple.jsonl")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice"))
+        .stdout(predicate::str::contains("Bob"))
+        .stdout(predicate::str::contains("Charlie").not());
+}
+
+#[test]
+fn test_skip_and_limit_option() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.arg("--skip")
+        .arg("1")
+        .arg("--limit")
+        .arg("1")
+        .arg("tests/fixtures/simple.jsonl")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice").not())
+        .stdout(predicate::str::contains("Bob"))
+        .stdout(predicate::str::contains("Charlie").not());
+}
+
+#[test]
+fn test_tail_option() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.arg("--tail")
+        .arg("1")
+        .arg("tests/fixtures/simple.jsonl")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice").not())
+        .stdout(predicate::str::contains("Bob").not())
+        .stdout(predicate::str::contains("Charlie"));
+}
+
+#[test]
+fn test_head_alias() {
+    let mut cmd = Command::cargo_bin("jlcat").unwrap();
+    cmd.arg("--head")
+        .arg("1")
+        .arg("tests/fixtures/simple.jsonl")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Alice"))
+        .stdout(predicate::str::contains("Bob").not());
+}

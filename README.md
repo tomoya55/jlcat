@@ -49,6 +49,9 @@ jlcat [OPTIONS] [FILE]
 | Option | Description |
 |--------|-------------|
 | `-i, --interactive` | Launch in interactive TUI mode |
+| `--skip N` | Skip the first N rows while reading input |
+| `--limit N` | Limit the number of rows read from input (`--head` alias) |
+| `--tail N` | Read only the last N rows (conflicts with `--skip`/`--limit`) |
 | `-c, --columns <COLS>` | Columns to display (comma-separated, supports wildcards) |
 | `-s, --sort <KEYS>` | Sort by columns (prefix with `-` for descending) |
 | `-r, --recursive` | Expand nested structures as child tables |
@@ -71,6 +74,20 @@ jlcat data.jsonl
 # From stdin
 cat data.jsonl | jlcat
 curl -s https://api.example.com/users | jlcat
+```
+
+### Paging (large files)
+
+```bash
+# Show only the first 100 rows (alias: --head)
+jlcat --limit 100 data.jsonl
+jlcat --head 100 data.jsonl
+
+# Skip the first 10k rows, then show the next 200 rows
+jlcat --skip 10000 --limit 200 data.jsonl
+
+# Show only the last 500 rows (useful for logs)
+jlcat --tail 500 data.jsonl
 ```
 
 ### Auto-flattening (default)

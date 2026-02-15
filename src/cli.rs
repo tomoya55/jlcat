@@ -13,6 +13,18 @@ pub struct Cli {
     #[arg(short, long)]
     pub interactive: bool,
 
+    /// Skip the first N rows while reading input
+    #[arg(long, value_name = "N")]
+    pub skip: Option<usize>,
+
+    /// Limit the number of rows read from input
+    #[arg(long, value_name = "N", alias = "head")]
+    pub limit: Option<usize>,
+
+    /// Read only the last N rows (mutually exclusive with --skip/--limit)
+    #[arg(long, value_name = "N", conflicts_with_all = ["skip", "limit"])]
+    pub tail: Option<usize>,
+
     /// Recursively expand nested structures as child tables
     #[arg(short, long)]
     pub recursive: bool,
@@ -108,5 +120,27 @@ mod tests {
     fn test_array_limit_default() {
         let cli = Cli::parse_from(["jlcat", "--flat"]);
         assert_eq!(cli.array_limit, 3);
+    }
+
+    #[test]
+    fn test_skip_limit_parse() {
+        let cli = Cli::parse_from(["jlcat", "--skip", "5", "--limit", "10"]);
+        assert_eq!(cli.skip, Some(5));
+        assert_eq!(cli.limit, Some(10));
+        assert_eq!(cli.tail, None);
+    }
+
+    #[test]
+    fn test_tail_parse() {
+        let cli = Cli::parse_from(["jlcat", "--tail", "25"]);
+        assert_eq!(cli.tail, Some(25));
+        assert_eq!(cli.skip, None);
+        assert_eq!(cli.limit, None);
+    }
+
+    #[test]
+    fn test_tail_conflicts_with_limit() {
+        let err = Cli::try_parse_from(["jlcat", "--tail", "10", "--limit", "5"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 }

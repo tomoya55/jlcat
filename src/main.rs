@@ -13,6 +13,7 @@ use error::{JlcatError, Result};
 use input::{sniff_format, InputFormat};
 use render::CatRenderer;
 use serde_json::Value;
+use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Read};
 
 fn main() -> Result<()> {
@@ -105,6 +106,10 @@ fn main() -> Result<()> {
 }
 
 fn read_input(cli: &Cli) -> Result<Vec<Value>> {
+    let skip = cli.skip.unwrap_or(0);
+    let limit = cli.limit;
+    let tail = cli.tail;
+
     if let Some(ref path) = cli.file {
         let file = std::fs::File::open(path)?;
         let reader = BufReader::new(file);
@@ -114,9 +119,11 @@ fn read_input(cli: &Cli) -> Result<Vec<Value>> {
         let peek = peekable.peek(64)?;
 
         match sniff_format(&peek) {
-            Some(InputFormat::JsonArray) => read_json_array(&mut peekable, cli.is_strict()),
+            Some(InputFormat::JsonArray) => {
+                read_json_array(&mut peekable, cli.is_strict(), skip, limit, tail)
+            }
             Some(InputFormat::JsonLines) | None => {
-                read_from_lines(peekable.lines(), cli.is_strict())
+                read_from_lines(peekable.lines(), cli.is_strict(), skip, limit, tail)
             }
         }
     } else {
@@ -128,19 +135,34 @@ fn read_input(cli: &Cli) -> Result<Vec<Value>> {
         let peek = peekable.peek(64)?;
 
         match sniff_format(&peek) {
-            Some(InputFormat::JsonArray) => read_json_array(&mut peekable, cli.is_strict()),
+            Some(InputFormat::JsonArray) => {
+                read_json_array(&mut peekable, cli.is_strict(), skip, limit, tail)
+            }
             Some(InputFormat::JsonLines) | None => {
-                read_from_lines(peekable.lines(), cli.is_strict())
+                read_from_lines(peekable.lines(), cli.is_strict(), skip, limit, tail)
             }
         }
     }
 }
 
-fn read_from_lines<I>(lines: I, strict: bool) -> Result<Vec<Value>>
+fn read_from_lines<I>(
+    lines: I,
+    strict: bool,
+    skip: usize,
+    limit: Option<usize>,
+    tail: Option<usize>,
+) -> Result<Vec<Value>>
 where
     I: Iterator<Item = io::Result<String>>,
 {
+    if tail == Some(0) || limit == Some(0) {
+        return Ok(Vec::new());
+    }
+
     let mut rows = Vec::new();
+    let mut tail_buf: Option<(usize, VecDeque<Value>)> =
+        tail.map(|n| (n, VecDeque::with_capacity(n)));
+    let mut skipped = 0usize;
 
     for (line_num, line) in lines.enumerate() {
         let line = line?;
@@ -150,7 +172,23 @@ where
         match serde_json::from_str::<Value>(&line) {
             Ok(value) => {
                 if value.is_object() {
-                    rows.push(value);
+                    if let Some((count, buf)) = tail_buf.as_mut() {
+                        if buf.len() == *count {
+                            buf.pop_front();
+                        }
+                        buf.push_back(value);
+                    } else {
+                        if skipped < skip {
+                            skipped += 1;
+                            continue;
+                        }
+                        rows.push(value);
+                        if let Some(max) = limit {
+                            if rows.len() >= max {
+                                break;
+                            }
+                        }
+                    }
                 } else if strict {
                     return Err(JlcatError::JsonParse {
                         line: line_num + 1,
@@ -179,32 +217,131 @@ where
         }
     }
 
-    Ok(rows)
+    if let Some((_, buf)) = tail_buf {
+        Ok(buf.into_iter().collect())
+    } else {
+        Ok(rows)
+    }
 }
 
-fn read_json_array<R: Read>(reader: &mut PeekableReader<R>, strict: bool) -> Result<Vec<Value>> {
-    let mut content = String::new();
-    reader.read_to_string(&mut content)?;
+fn read_json_array<R: Read>(
+    reader: &mut PeekableReader<R>,
+    strict: bool,
+    skip: usize,
+    limit: Option<usize>,
+    tail: Option<usize>,
+) -> Result<Vec<Value>> {
+    if tail == Some(0) || limit == Some(0) {
+        return Ok(Vec::new());
+    }
 
-    let array: Vec<Value> = serde_json::from_str(&content).map_err(|e| JlcatError::JsonParse {
-        line: 1,
-        message: e.to_string(),
-    })?;
+    enum PagingMode {
+        Window { skip: usize, limit: Option<usize> },
+        Tail { count: usize },
+    }
 
-    // Filter out non-objects if in lenient mode, or return error in strict mode
-    let mut rows = Vec::new();
-    for (idx, value) in array.into_iter().enumerate() {
-        if value.is_object() {
-            rows.push(value);
-        } else if strict {
-            return Err(JlcatError::JsonParse {
-                line: idx + 1,
-                message: "array element is not an object".to_string(),
-            });
+    struct ArrayVisitor {
+        strict: bool,
+        mode: PagingMode,
+    }
+
+    impl<'de> serde::de::Visitor<'de> for ArrayVisitor {
+        type Value = Vec<Value>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a JSON array")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            match self.mode {
+                PagingMode::Tail { count } => {
+                    let mut buf: VecDeque<Value> = VecDeque::with_capacity(count);
+                    let mut idx = 0usize;
+
+                    while let Some(value) = seq.next_element::<Value>()? {
+                        idx += 1;
+                        if value.is_object() {
+                            if buf.len() == count {
+                                buf.pop_front();
+                            }
+                            buf.push_back(value);
+                        } else if self.strict {
+                            return Err(serde::de::Error::custom(format!(
+                                "array element {} is not an object",
+                                idx
+                            )));
+                        }
+                    }
+
+                    Ok(buf.into_iter().collect())
+                }
+                PagingMode::Window { skip, limit } => {
+                    let mut rows: Vec<Value> = Vec::new();
+                    let mut skipped = 0usize;
+                    let mut idx = 0usize;
+                    let mut limit_reached = false;
+
+                    while let Some(value) = seq.next_element::<Value>()? {
+                        idx += 1;
+
+                        if !value.is_object() {
+                            if self.strict {
+                                return Err(serde::de::Error::custom(format!(
+                                    "array element {} is not an object",
+                                    idx
+                                )));
+                            }
+                            continue;
+                        }
+
+                        if skipped < skip {
+                            skipped += 1;
+                            continue;
+                        }
+
+                        if let Some(max) = limit {
+                            if rows.len() >= max {
+                                limit_reached = true;
+                                break;
+                            }
+                        }
+
+                        rows.push(value);
+
+                        if let Some(max) = limit {
+                            if rows.len() >= max {
+                                limit_reached = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if limit_reached {
+                        while let Some(_) = seq.next_element::<serde::de::IgnoredAny>()? {}
+                    }
+
+                    Ok(rows)
+                }
+            }
         }
     }
 
-    Ok(rows)
+    let mode = if let Some(n) = tail {
+        PagingMode::Tail { count: n }
+    } else {
+        PagingMode::Window { skip, limit }
+    };
+
+    let mut de = serde_json::Deserializer::from_reader(reader);
+    serde::de::Deserializer::deserialize_seq(&mut de, ArrayVisitor { strict, mode }).map_err(|e| {
+        JlcatError::JsonParse {
+            line: 1,
+            message: e.to_string(),
+        }
+    })
 }
 
 /// Convert a ChildTable to TableData for rendering

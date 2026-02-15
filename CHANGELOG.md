@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Paging options for large inputs: `--skip N`, `--limit N` (`--head` alias), and `--tail N`
+
 ## [0.1.3] - 2026-02-04
 
 ### Added
