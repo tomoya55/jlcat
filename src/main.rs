@@ -320,7 +320,7 @@ fn read_json_array<R: Read>(
                     }
 
                     if limit_reached {
-                        while let Some(_) = seq.next_element::<serde::de::IgnoredAny>()? {}
+                        while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
                     }
 
                     Ok(rows)
