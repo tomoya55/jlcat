@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-02-18
+
+### Added
+
+- Paging options for large inputs: `--skip N`, `--limit N` (`--head` alias), and `--tail N`
+
+### Fixed
+
+- Clippy warning (`redundant_pattern_matching`) in JSON array paging parser
+
 ## [0.1.3] - 2026-02-04
 
 ### Added
@@ -48,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Disable flattening** (`--no-flatten`) - Keep nested objects as JSON strings
 - Cross-platform support: Linux, macOS (Intel & Apple Silicon), Windows
 
+[0.1.4]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.4
 [0.1.3]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.3
 [0.1.2]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.2
 [0.1.1]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.1
