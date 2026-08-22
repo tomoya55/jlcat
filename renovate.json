@@ -13,6 +13,7 @@
   "prConcurrentLimit": 5,
   "minimumReleaseAge": "3 days",
   "separateMinorPatch": false,
+  "rebaseWhen": "behind-base-branch",
   "platformAutomerge": true,
   "automergeStrategy": "squash",
   "osvVulnerabilityAlerts": true,
