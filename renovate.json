@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)",
+    "helpers:pinGitHubActionDigests",
+    "security:openssf-scorecard"
+  ],
+  "timezone": "Asia/Tokyo",
+  "schedule": ["before 9am on monday"],
+  "labels": ["dependencies"],
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 5,
+  "minimumReleaseAge": "3 days",
+  "separateMinorPatch": false,
+  "rebaseWhen": "behind-base-branch",
+  "platformAutomerge": true,
+  "automergeStrategy": "squash",
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 9am on the first day of the month"],
+    "automerge": true
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null
+  },
+  "packageRules": [
+    {
+      "description": "Bundle every non-breaking update (patch/minor, digest pins, GitHub Actions) into a single PR",
+      "matchUpdateTypes": ["patch", "minor", "pin", "pinDigest", "digest"],
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major",
+      "automerge": true
+    },
+    {
+      "description": "Cargo treats 0.x minor bumps as compatible, but they are breaking in practice - keep them out of the bundled PR",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor"],
+      "matchCurrentVersion": "/^0\\./",
+      "groupName": null,
+      "groupSlug": null,
+      "automerge": false,
+      "labels": ["dependencies", "breaking"],
+      "prBodyNotes": [
+        ":warning: Pre-1.0 crate: a minor bump may contain breaking API changes. Review the changelog before merging."
+      ]
+    },
+    {
+      "description": "Major updates stay in their own PR",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "breaking"]
+    },
+    {
+      "description": "Keep the Rust toolchain pinned by mise out of automated updates",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["rust"],
+      "enabled": false
+    }
+  ]
+}
