@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-22
+
+Maintenance release. No functional changes to the CLI.
+
+### Changed
+
+- Update `rand` (test-only dependency) from 0.9.2 to 0.9.4
+- Adopt Renovate for automated dependency updates
+
 ## [0.1.4] - 2026-02-18
 
 ### Added
@@ -58,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Disable flattening** (`--no-flatten`) - Keep nested objects as JSON strings
 - Cross-platform support: Linux, macOS (Intel & Apple Silicon), Windows
 
+[0.1.5]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.5
 [0.1.4]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.4
 [0.1.3]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.3
 [0.1.2]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.2
