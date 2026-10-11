@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-11
+
+Maintenance release. No changes to application source code.
+
+### Changed
+
+- Update `clap` to 4.6.7, `crossterm` to 0.29.0, and `ratatui` to 0.30.2
+- Refresh transitive dependencies in `Cargo.lock`
+- Update GitHub Actions dependencies used by CI and release workflows
+
 ## [0.1.5] - 2026-08-22
 
 Maintenance release. No functional changes to the CLI.
@@ -67,6 +77,7 @@ Maintenance release. No functional changes to the CLI.
 - **Disable flattening** (`--no-flatten`) - Keep nested objects as JSON strings
 - Cross-platform support: Linux, macOS (Intel & Apple Silicon), Windows
 
+[0.1.6]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.6
 [0.1.5]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.5
 [0.1.4]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.4
 [0.1.3]: https://github.com/tomoya55/jlcat/releases/tag/v0.1.3
