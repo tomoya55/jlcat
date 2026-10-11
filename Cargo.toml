@@ -14,7 +14,7 @@ atty = "0.2"
 tempfile = "3"
 comfy-table = "7"
 ratatui = "0.29"
-crossterm = "0.28"
+crossterm = "0.29"
 
 [dev-dependencies]
 assert_cmd = "2"
