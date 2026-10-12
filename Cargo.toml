@@ -12,7 +12,7 @@ serde_json = "1"
 thiserror = "2"
 atty = "0.2"
 tempfile = "3"
-comfy-table = "7"
+comfy-table = "8"
 ratatui = "0.30"
 crossterm = "0.29"
 
