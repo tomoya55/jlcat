@@ -21,10 +21,10 @@ impl CatRenderer {
 
         // Apply style
         match self.style {
-            TableStyle::Ascii => table.load_preset(presets::ASCII_FULL),
-            TableStyle::Rounded => table.load_preset(presets::UTF8_FULL),
-            TableStyle::Markdown => table.load_preset(presets::ASCII_MARKDOWN),
-            TableStyle::Plain => table.load_preset(presets::NOTHING),
+            TableStyle::Ascii => table.load_style(presets::ASCII_FULL),
+            TableStyle::Rounded => table.load_style(presets::UTF8_FULL),
+            TableStyle::Markdown => table.load_style(presets::ASCII_MARKDOWN),
+            TableStyle::Plain => table.load_style(presets::NOTHING),
         };
 
         table.set_content_arrangement(ContentArrangement::Dynamic);
@@ -49,10 +49,10 @@ impl CatRenderer {
         let mut table = Table::new();
 
         match self.style {
-            TableStyle::Ascii => table.load_preset(presets::ASCII_FULL),
-            TableStyle::Rounded => table.load_preset(presets::UTF8_FULL),
-            TableStyle::Markdown => table.load_preset(presets::ASCII_MARKDOWN),
-            TableStyle::Plain => table.load_preset(presets::NOTHING),
+            TableStyle::Ascii => table.load_style(presets::ASCII_FULL),
+            TableStyle::Rounded => table.load_style(presets::UTF8_FULL),
+            TableStyle::Markdown => table.load_style(presets::ASCII_MARKDOWN),
+            TableStyle::Plain => table.load_style(presets::NOTHING),
         };
 
         table.set_content_arrangement(ContentArrangement::Dynamic);
